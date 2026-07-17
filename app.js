@@ -1,0 +1,401 @@
+const express = require('express');
+const bcrypt = require('bcrypt');
+const mongoose = require('mongoose');
+const path = require('path');
+const session=require('express-session')
+const User = require('./models/user');
+const Review=require('./models/review');
+const Watchlist=require('./models/watchlist')
+const axios = require('axios');
+const review = require('./models/review');
+require('dotenv').config();
+const app = express();
+
+const {loginschema,signupschema}=require('./models/validation');
+const watchlist = require('./models/watchlist');
+app.set('view engine', 'ejs');
+app.set('views', path.join(__dirname, 'views'));
+app.use(express.urlencoded({ extended: true }));
+app.use(express.static(path.join(__dirname, 'public')));
+
+const tmdbParams = () => ({
+    api_key: process.env.TMDB_API_KEY
+});
+
+function shuffleMovies(movies) {
+    return movies
+        .map(movie => ({ movie, sort: Math.random() }))
+        .sort((first, second) => first.sort - second.sort)
+        .map(({ movie }) => movie);
+}
+
+async function addReviewStats(movies) {
+    for (let movie of movies) {
+        const reviews = await Review.find({ tmdbId: Number(movie.id) });
+        movie.numReviews = reviews.length;
+        if (reviews.length > 0) {
+            const total = reviews.reduce((sum, review) => sum + review.rating, 0);
+            movie.avgRating = total / reviews.length;
+        }
+        else {
+            movie.avgRating = 0;
+        }
+    }
+    return movies;
+}
+
+async function getRandomRelevantMovies() {
+    const randomPage = Math.floor(Math.random() * 8) + 1;
+    const randomYear = Math.floor(Math.random() * 45) + 1980;
+    const discoveryRequests = [
+        axios.get('https://api.themoviedb.org/3/movie/top_rated', {
+            params: {
+                ...tmdbParams(),
+                page: randomPage
+            }
+        }),
+        axios.get('https://api.themoviedb.org/3/trending/movie/week', {
+            params: tmdbParams()
+        }),
+        axios.get('https://api.themoviedb.org/3/discover/movie', {
+            params: {
+                ...tmdbParams(),
+                sort_by: 'popularity.desc',
+                'vote_count.gte': 500,
+                primary_release_year: randomYear,
+                page: 1
+            }
+        })
+    ];
+
+    const responses = await Promise.all(discoveryRequests);
+    const moviesById = new Map();
+
+    responses.forEach(response => {
+        response.data.results.forEach(movie => {
+            if (movie.poster_path && !moviesById.has(movie.id)) {
+                moviesById.set(movie.id, movie);
+            }
+        });
+    });
+
+    return addReviewStats(shuffleMovies([...moviesById.values()]).slice(0, 8));
+}
+mongoose.connect('mongodb://127.0.0.1:27017/Movies')
+
+
+.then(function () {
+    console.log('DB connected');
+})
+.catch(function (err) {
+    console.log('DB error:', err.message);
+});
+app.use(session({
+    secret:'secretkey',
+    resave:false,
+    saveUninitialized:false
+}))
+app.use((req, res, next) => {
+    res.locals.currentPath = req.path;
+    res.locals.searchQuery = req.query.q || '';
+    next();
+
+});
+app.use(async (req, res, next) => {
+    res.locals.currentUser = null;
+    if(req.session.userId){
+        const user = await User.findById(
+            req.session.userId
+        );
+        res.locals.currentUser = user;
+    }
+    next();
+});
+app.get('/', async (req, res)=> {
+    try {
+        const search = req.query.q;
+        let allMovies=[];
+        let randomMovies=[];
+        let pageTitle = 'Browse Movies';
+        let pageSubtitle = 'Rate films, read quick reactions, and find your next watch.';
+
+        if (search) {
+            const response = await axios.get(
+            'https://api.themoviedb.org/3/search/movie',{
+            params: {
+                    api_key: process.env.TMDB_API_KEY,
+                    query: search
+                }})
+            allMovies=response.data.results;
+            await addReviewStats(allMovies);
+            pageTitle = 'Search results for "' + search + '"';
+            pageSubtitle = allMovies.length + ' movies found';
+        } 
+        else {
+            const response = await axios.get(
+                'https://api.themoviedb.org/3/movie/popular',
+                {
+                    params: {
+                        api_key: process.env.TMDB_API_KEY
+                    }
+                }
+            );
+            allMovies = response.data.results;
+            await addReviewStats(allMovies);
+            randomMovies = await getRandomRelevantMovies();
+        }
+
+        res.render('index', {
+            allMovies: allMovies,
+            randomMovies: randomMovies,
+            pageTitle: pageTitle,
+            pageSubtitle: pageSubtitle
+        });
+    } catch (err) {
+        console.log(err);
+        res.send('Something went wrong');
+    }
+});
+
+
+app.post('/signup',async (req,res)=>{
+    const {error}=signupschema.validate(req.body)
+    if(error){
+        return res.render('signup',{
+        error:error.details[0].message,
+        old:req.body
+    })
+    }
+    try{
+    const hpass= await bcrypt.hash(req.body.password,10);
+
+    await User.create({
+        username:req.body.username,
+        email:req.body.email,
+        password:hpass
+    })
+    res.redirect('/login')
+}
+catch(err){
+    console.log(err);
+    res.render('signup', {
+            error: 'Signup failed',
+            old: req.body
+        });
+}
+    
+})
+
+app.post('/login',async(req,res)=>{
+    const {error}=loginschema.validate(req.body)
+    if(error){
+        return res.render('login',{
+            error:error.details[0].message,
+            old:req.body
+        });
+
+    }
+    try{
+    const user=await User.findOne({
+        email:req.body.email
+    })
+    if(!user){
+        return res.render('login',{
+    error:'Invalid Email',
+    old:req.body})
+    }
+    const valid=await bcrypt.compare(req.body.password,user.password);
+    if(!valid){
+        return res.render('login',{
+    error:'Incorrect Password',
+    old:req.body
+})
+    }
+    req.session.userId=user._id;
+    res.redirect('/');
+}
+catch(err){
+    console.log(err);
+    res.render('login', {
+            error: 'Login failed',
+            old: req.body
+        });
+}
+})
+
+function isloggedin(req,res,next){
+    if(!req.session.userId){
+        return res.redirect('/login');
+    }
+    next();
+}
+app.get('/movie/:id',isloggedin,async(req,res)=>{
+    try{
+        const response=await axios.get(`https://api.themoviedb.org/3/movie/${req.params.id}`,{
+            params:{
+                api_key:process.env.TMDB_API_KEY
+            }
+    })
+    const watchlistMovie= await Watchlist.findOne({
+        userId:req.session.userID,
+        tmdbId:Number(req.params.id)
+    })
+        const movie=response.data;
+        const reviews=await Review.find({
+            tmdbId:Number(req.params.id),
+
+        }).populate('userId');
+        const userReview = await Review.findOne({
+            userId: req.session.userId,
+            tmdbId: Number(req.params.id)
+        });
+        res.render('show',{
+            movie,
+            reviews,
+            userReview,
+            watchlistMovie
+        });
+    }
+    catch(err){
+        console.log(err);
+        res.send("Movie not found")
+    }
+})
+app.post('/movie/:id/review',isloggedin,async(req,res)=>{
+    try{
+        const existingreview=await Review.findOne({
+            userId:req.session.userId,
+            tmdbId:Number(req.params.id)
+        });
+        if(existingreview){
+            existingreview.rating=req.body.rating;
+            existingreview.comment=req.body.comment;
+            await existingreview.save();
+        }
+        else{
+            await Review.create({
+                userId:req.session.userId,
+                tmdbId:Number(req.params.id),
+                rating:req.body.rating,
+                comment:req.body.comment
+            })
+        }
+        res.redirect('/movie/' + req.params.id);
+    }
+    catch(err){
+        console.log(err);
+        res.send('Could not save review');
+    }
+})
+app.get('/watchlist',isloggedin,async(req,res)=>{
+    try{
+        const movies=await watchlist.find({
+            userId:req.session.userId
+        })
+        res.render('watchlist',{movies})
+    }
+    catch(err){
+        console.log(err);
+        res.send("Could not load watchlist")
+    }
+})
+app.post('/watchlist/add',isloggedin, async(req,res)=>{
+    try{
+        const{tmdbId,title,posterPath,status}=req.body
+        const existing=await Watchlist.findOne({
+            userId:req.session.userId,
+            tmdbId:Number(tmdbId)
+        })
+        if(existing){
+            existing.status=status;
+            await existing.save()
+        }
+        else{
+            await Watchlist.create({
+                userId:req.session.userId,
+                tmdbId:Number(tmdbId),
+                title,
+                posterPath,
+                status
+            })
+        }
+        res.redirect('/movie/'+tmdbId);
+    }
+    catch(err){
+        console.log(err);
+        res.send('Could not update watchlist')
+    }
+})
+
+app.post('/watchlist/remove/:id',isloggedin,async(req,res)=>{
+    try{
+        await Watchlist.findByIdAndDelete(req.params.id);
+        res.redirect('/watchlist')
+    }
+    catch(err){
+        console.log(err);
+        res.send('could not remove from watchlist')
+    }
+})
+app.get('/trending',async (req,res)=>{
+    try{
+        const response=await axios.get('https://api.themoviedb.org/3/trending/movie/week',{
+            params:{api_key:process.env.TMDB_API_KEY}
+        });
+        const allMovies=response.data.results;
+
+        for(let movie of allMovies){
+            const reviews=await Review.find({
+                tmdbId:Number(movie.id)
+            });
+            movie.numReviews=reviews.length;
+            if(reviews.length>0){
+                const total=reviews.reduce((sum,review)=> sum +review.rating,0)
+                movie.avgRating=total/reviews.length;
+            }
+            else{
+                movie.avgRating=0
+            }
+        }
+        res.render('index',{
+            allMovies,
+            pageTitle:"Trending Movies",
+            pageSubtitle:"Trending on Wysteria"
+        })
+    }
+    catch(err){
+        console.log(err)
+        res.send('Somehting went wrong')
+    }
+})
+app.get('/login', (req, res) => {
+    res.render('login',{
+        error:null,
+        old:{}
+    });
+});
+app.get('/watch/:id',isloggedin,async (req,res)=>{
+    try{
+        const response=await axios.get(`https://api.themoviedb.org/3/movie/${req.params.id}`,{params:{api_key:process.env.TMDB_API_KEY}})
+        const movie=response.data
+        res.render('watch',{movie});
+    }
+    catch(err){
+        console.log(err)
+        res.send('Cannot play movie')
+    }
+})
+app.get('/signup', (req, res) => {
+    res.render('signup',{
+        error:null,
+        old:{}
+    });
+});
+app.get('/logout',(req,res)=>{
+    req.session.destroy(()=>{
+        res.redirect('/')
+    })
+})
+app.listen(4444, function () {
+    console.log('server has started on port 4444');
+});

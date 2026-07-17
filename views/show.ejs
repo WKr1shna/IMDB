@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= movie.title %> | Wysteria</title>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+  <link href="/styles.css" rel="stylesheet">
+  <style>
+    .rating-stars {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 18px;
+    }
+
+    .rating-legend {
+      width: 100%;
+      margin-bottom: 4px;
+      color: var(--muted);
+      font-weight: 800;
+    }
+
+    .rating-stars input {
+      position: absolute;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .rating-stars label {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 44px;
+      height: 38px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.07);
+      color: var(--muted);
+      cursor: pointer;
+      font-weight: 900;
+      transition: transform 160ms ease, background 160ms ease, color 160ms ease, border-color 160ms ease;
+    }
+
+    .rating-stars label::before {
+      content: "\2605";
+      margin-right: 4px;
+      color: var(--gold);
+    }
+
+    .rating-stars input:checked + label,
+    .rating-stars label:hover {
+      background: linear-gradient(135deg, var(--gold), #fff0bb);
+      border-color: transparent;
+      color: #131721;
+      transform: translateY(-2px);
+    }
+  </style>
+</head>
+<body>
+  <%- include('./navbar.ejs') %>
+
+  <%
+    const currentUserRating = userReview ? Number(userReview.rating) : 0;
+    const avgRating = reviews.length > 0
+      ? reviews.reduce((sum, review) => sum + Number(review.rating || 0), 0) / reviews.length
+      : 0;
+  %>
+
+  <main class="page-shell">
+    <div class="container">
+      <div class="detail-layout">
+        <aside class="detail-poster-panel">
+          <div class="poster-frame">
+            <% if (movie.poster_path) { %>
+              <img
+                src="https://image.tmdb.org/t/p/w500<%= movie.poster_path %>"
+                class="detail-poster"
+                alt="<%= movie.title %> poster"
+              >
+            <% } else { %>
+              <div class="poster-placeholder">
+                <i class="bi bi-film"></i>
+              </div>
+            <% } %>
+          </div>
+        </aside>
+
+        <section>
+          <div class="detail-content">
+            <div class="eyebrow">Movie Details</div>
+            <h1 class="page-title"><%= movie.title %></h1>
+            <p class="page-subtitle mb-4">
+              <%= movie.overview || 'No overview available.' %>
+            </p>
+
+            <div class="d-flex flex-wrap gap-2 mb-4">
+              <span class="rating-pill">
+                <i class="bi bi-star-fill"></i>
+                <%= avgRating.toFixed(1) %>
+              </span>
+              <span class="btn btn-outline-light disabled">
+                <i class="bi bi-calendar3 me-1"></i>
+                <%= movie.release_date ? movie.release_date.split('-')[0] : 'N/A' %>
+              </span>
+              <span class="btn btn-outline-light disabled">
+                <i class="bi bi-chat-left-text me-1"></i>
+                <%= reviews.length %>
+              </span>
+            </div>
+
+            <div class="d-flex flex-wrap align-items-center gap-2">
+              <a href="/watch/<%= movie.id %>" class="btn btn-danger">
+                <i class="bi bi-play-circle me-1"></i>
+                Watch Movie
+              </a>
+
+              <% if (watchlistMovie) { %>
+                <form action="/watchlist/add" method="POST" class="m-0">
+                  <input type="hidden" name="tmdbId" value="<%= movie.id %>">
+                  <input type="hidden" name="title" value="<%= movie.title %>">
+                  <input type="hidden" name="posterPath" value="<%= movie.poster_path || '' %>">
+                  <label for="watchStatus" class="visually-hidden">Watchlist status</label>
+                  <select
+                    id="watchStatus"
+                    name="status"
+                    class="form-select"
+                    onchange="this.form.submit()"
+                    aria-label="Change watchlist status"
+                  >
+                    <% ['Plan to Watch', 'Watching', 'Completed', 'On hold', 'Dropped'].forEach((statusOption) => { %>
+                      <option value="<%= statusOption %>" <%= watchlistMovie.status === statusOption ? 'selected' : '' %>>
+                        <%= statusOption %>
+                      </option>
+                    <% }) %>
+                  </select>
+                </form>
+              <% } else { %>
+                <form action="/watchlist/add" method="POST" class="m-0">
+                  <input type="hidden" name="tmdbId" value="<%= movie.id %>">
+                  <input type="hidden" name="title" value="<%= movie.title %>">
+                  <input type="hidden" name="posterPath" value="<%= movie.poster_path || '' %>">
+                  <input type="hidden" name="status" value="Plan to Watch">
+                  <button class="btn btn-warning">
+                    <i class="bi bi-bookmark-plus me-1"></i>
+                    Add to Watchlist
+                  </button>
+                </form>
+              <% } %>
+
+              <a href="/" class="btn btn-outline-light">
+                <i class="bi bi-arrow-left me-1"></i>
+                Back
+              </a>
+            </div>
+          </div>
+
+          <section class="review-panel">
+            <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
+              <div>
+                <div class="eyebrow">Your Review</div>
+                <h2 class="h4 mb-1"><%= userReview ? 'Edit your rating' : 'Rate this movie' %></h2>
+                <p class="text-muted mb-0">One review per browser. You can update it anytime.</p>
+              </div>
+              <% if (userReview) { %>
+                <span class="badge badge-you">You rated <%= userReview.rating %>/5</span>
+              <% } %>
+            </div>
+
+            <form action="/movie/<%= movie.id %>/review" method="POST">
+              <fieldset class="rating-stars">
+                <legend class="rating-legend">Choose your rating</legend>
+
+                <% for (let rating = 1; rating <= 5; rating++) { %>
+                  <input
+                    type="radio"
+                    id="rate<%= rating %>"
+                    name="rating"
+                    value="<%= rating %>"
+                    <%= currentUserRating === rating ? 'checked' : '' %>
+                    required
+                  >
+                  <label for="rate<%= rating %>"><%= rating %></label>
+                <% } %>
+              </fieldset>
+
+              <div class="mb-3">
+                <label for="comment" class="form-label">Comment</label>
+                <textarea
+                  class="form-control"
+                  id="comment"
+                  name="comment"
+                  rows="4"
+                  placeholder="Share what stood out to you..."
+                ><%= userReview ? userReview.comment : '' %></textarea>
+              </div>
+
+              <button class="btn btn-warning">
+                <i class="bi bi-send me-1"></i>
+                <%= userReview ? 'Update Review' : 'Submit Review' %>
+              </button>
+            </form>
+          </section>
+
+          <section class="comments-panel">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <div>
+                <div class="eyebrow">Community</div>
+                <h2 class="h4 mb-0">Reviews</h2>
+              </div>
+              <span class="rating-pill">
+                <i class="bi bi-star-fill"></i>
+                <%= reviews.length %>
+              </span>
+            </div>
+
+            <% if (reviews.length === 0) { %>
+              <div class="empty-state">
+                <i class="bi bi-chat-square-text fs-1 text-warning"></i>
+                <p class="mb-0 mt-3 text-muted">No reviews yet. Be the first to leave one.</p>
+              </div>
+            <% } %>
+
+            <% reviews.forEach((reviewItem) => { %>
+              <article class="comment-item">
+                <p class="fw-bold mb-1">
+                  <%= reviewItem.userId && reviewItem.userId.username ? reviewItem.userId.username : 'Wysteria user' %>
+                </p>
+
+                <div class="d-flex justify-content-between align-items-center gap-3">
+                  <strong>
+                    <i class="bi bi-star-fill text-warning me-1"></i>
+                    <%= reviewItem.rating %>/5
+                  </strong>
+
+                  <% if (
+                    userReview &&
+                    reviewItem.userId &&
+                    reviewItem.userId._id &&
+                    reviewItem.userId._id.toString() === userReview.userId.toString()
+                  ) { %>
+                    <span class="badge badge-you">You</span>
+                  <% } %>
+                </div>
+
+                <% if (reviewItem.comment && reviewItem.comment.trim()) { %>
+                  <p class="mb-0 mt-2 text-muted"><%= reviewItem.comment %></p>
+                <% } else { %>
+                  <p class="mb-0 mt-2 text-muted fst-italic">No comment added.</p>
+                <% } %>
+              </article>
+            <% }) %>
+          </section>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.min.js"></script>
+</body>
+</html>

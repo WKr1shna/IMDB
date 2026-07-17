@@ -1,0 +1,59 @@
+<nav class="navbar navbar-expand-lg navbar-dark app-navbar fixed-top">
+  <div class="container">
+    <a class="navbar-brand d-flex align-items-center gap-2 fw-bold" href="/">
+      <span class="navbar-brand-mark">W</span>
+      <span>Wysteria</span>
+    </a>
+
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+
+    <div class="collapse navbar-collapse" id="navbarNav">
+      <ul class="navbar-nav me-lg-auto ms-lg-4 my-3 my-lg-0">
+        <li class="nav-item">
+          <a class="nav-link <%= currentPath === '/' ? 'active' : '' %>" href="/">
+            <i class="bi bi-grid-3x3-gap me-1"></i> Browse
+          </a>
+        </li>
+
+        <li class="nav-item">
+          <a class="nav-link <%= currentPath === '/trending' ? 'active' : '' %>" href="/trending">
+            <i class="bi bi-graph-up-arrow me-1"></i> Trending
+          </a>
+        </li>
+      </ul>
+
+      <form class="d-flex nav-search me-lg-3 mb-3 mb-lg-0" action="/" method="GET">
+        <input class="form-control me-2" type="search" name="q" value="<%= searchQuery || '' %>" placeholder="Search movies">
+        <button class="btn btn-outline-light" aria-label="Search">
+          <i class="bi bi-search"></i>
+        </button>
+      </form>
+
+      <div class="navbar-actions d-flex flex-wrap align-items-center gap-2">
+        <% if (typeof currentUser !== 'undefined' && currentUser) { %>
+          <a href="/watchlist" class="btn btn-outline-light">
+            <i class="bi bi-bookmark-heart me-1"></i> Watchlist
+          </a>
+          <span class="navbar-text text-light me-lg-1">
+            <i class="bi bi-person-circle me-1"></i>
+            <%= currentUser.username %>
+          </span> 
+          <a href="/logout" class="btn btn-primary">
+            Logout
+          </a>
+          
+        <% } else { %>
+          <a href="/login" class="btn btn-outline-light">
+            Login
+          </a>
+
+          <a href="/signup" class="btn btn-warning">
+            Signup
+          </a>
+        <% } %>
+      </div>
+    </div>
+  </div>
+</nav>
