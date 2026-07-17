@@ -74,12 +74,24 @@
                 <label class="form-label">
                   Password
                 </label>
-                <input
-                  type="password"
-                  class="form-control"
-                  name="password"
-                  required
-                >
+                <div class="input-group">
+                  <input
+                    type="password"
+                    id="password-input"
+                    class="form-control"
+                    name="password"
+                    required
+                    style="border-right: none;"
+                  >
+                  <button
+                    type="button"
+                    class="btn btn-outline-secondary d-flex align-items-center"
+                    id="toggle-password"
+                    style="border-left: none; border-color: rgba(255, 255, 255, 0.15); background: #1a1a1a; color: #888;"
+                  >
+                    <i class="bi bi-eye" id="toggle-icon"></i>
+                  </button>
+                </div>
                 <% if(error && error.includes('Password')){ %>
                   <div class="text-danger mt-1">
                     <%= error %>
@@ -100,5 +112,24 @@
       </div>
     </div>
   </main>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const passwordInput = document.getElementById('password-input');
+      const toggleButton = document.getElementById('toggle-password');
+      const toggleIcon = document.getElementById('toggle-icon');
+      
+      if (toggleButton && passwordInput && toggleIcon) {
+        toggleButton.addEventListener('click', () => {
+          if (passwordInput.type === 'password') {
+            passwordInput.type = 'text';
+            toggleIcon.className = 'bi bi-eye-slash';
+          } else {
+            passwordInput.type = 'password';
+            toggleIcon.className = 'bi bi-eye';
+          }
+        });
+      }
+    });
+  </script>
 </body>
 </html>
