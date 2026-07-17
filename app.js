@@ -581,7 +581,10 @@ app.get('/watch-series/:id', isloggedin, async (req, res) => {
         res.send('Cannot play series');
     }
 });
+if (!process.env.VERCEL) {
+    app.listen(4444, function () {
+        console.log('server has started on port 4444');
+    });
+}
 
-app.listen(4444, function () {
-    console.log('server has started on port 4444');
-});
+module.exports = app;

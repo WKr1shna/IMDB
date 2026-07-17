@@ -32,7 +32,14 @@
                 'On hold',
                 'Dropped'
             ],
-            default: 'plan_to_watch'
+            default: 'Plan to Watch'
+        },
+
+        mediaType: {
+            type: String,
+            enum: ['movie', 'tv'],
+            default: 'movie',
+            required: true
         },
 
         addedAt: {
@@ -43,7 +50,7 @@
     });
 
      watchlistSchema.index(
-            { userId: 1, tmdbId: 1 },
+            { userId: 1, tmdbId: 1, mediaType: 1 },
             { unique: true }
         );
 

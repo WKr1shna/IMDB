@@ -26,6 +26,13 @@
             default: ''
         },
 
+        mediaType: {
+            type: String,
+            enum: ['movie', 'tv'],
+            default: 'movie',
+            required: true
+        },
+
         createdAt: {
             type: Date,
             default: Date.now
@@ -33,7 +40,7 @@
 
     });
     reviewSchema.index(
-    { userId: 1, tmdbId: 1 },
+    { userId: 1, tmdbId: 1, mediaType: 1 },
     { unique: true }
 );
  module.exports = mongoose.model('Review', reviewSchema);
