@@ -18,14 +18,20 @@
         </li>
 
         <li class="nav-item">
+          <a class="nav-link <%= currentPath.startsWith('/series') ? 'active' : '' %>" href="/series">
+            <i class="bi bi-tv me-1"></i> Series
+          </a>
+        </li>
+
+        <li class="nav-item">
           <a class="nav-link <%= currentPath === '/trending' ? 'active' : '' %>" href="/trending">
             <i class="bi bi-graph-up-arrow me-1"></i> Trending
           </a>
         </li>
       </ul>
 
-      <form class="d-flex nav-search me-lg-3 mb-3 mb-lg-0" action="/" method="GET">
-        <input class="form-control me-2" type="search" name="q" value="<%= searchQuery || '' %>" placeholder="Search movies">
+      <form class="d-flex nav-search me-lg-3 mb-3 mb-lg-0" action="<%= currentPath.startsWith('/series') ? '/series' : '/' %>" method="GET">
+        <input class="form-control me-2" type="search" name="q" value="<%= searchQuery || '' %>" placeholder="<%= currentPath.startsWith('/series') ? 'Search series' : 'Search movies' %>">
         <button class="btn btn-outline-light" aria-label="Search">
           <i class="bi bi-search"></i>
         </button>

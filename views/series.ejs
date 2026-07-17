@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= pageTitle || 'Wysteria Series' %></title>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+  <link href="/styles.css" rel="stylesheet">
+</head>
+<body>
+  <%- include('./navbar.ejs') %>
+
+  <% const carouselSeries = typeof allSeries !== 'undefined' && currentPath === '/series' && !searchQuery ? allSeries.filter(series => series.backdrop_path || series.poster_path).slice(0, 5) : []; %>
+  <% const surpriseSeries = typeof allSeries !== 'undefined' && currentPath === '/series' && !searchQuery && typeof randomSeries !== 'undefined' ? randomSeries : []; %>
+
+  <main class="page-shell">
+    <div class="container">
+      <% if (carouselSeries.length > 0) { %>
+        <section class="home-carousel" aria-label="Featured series">
+          <div id="homeSeriesCarousel" class="carousel slide" data-bs-ride="carousel">
+            <div class="carousel-indicators">
+              <% carouselSeries.forEach((series, index) => { %>
+                <button
+                  type="button"
+                  data-bs-target="#homeSeriesCarousel"
+                  data-bs-slide-to="<%= index %>"
+                  class="<%= index === 0 ? 'active' : '' %>"
+                  aria-current="<%= index === 0 ? 'true' : 'false' %>"
+                  aria-label="Slide <%= index + 1 %>"
+                ></button>
+              <% }) %>
+            </div>
+
+            <div class="carousel-inner">
+              <% carouselSeries.forEach((series, index) => { %>
+                <% const backdrop = series.backdrop_path || series.poster_path; %>
+                <div class="carousel-item <%= index === 0 ? 'active' : '' %>">
+                  <div
+                    class="featured-slide"
+                    style="background-image: url('https://image.tmdb.org/t/p/original<%= backdrop %>');"
+                  >
+                    <div class="featured-slide-content">
+                      <% if (series.poster_path) { %>
+                        <img
+                          src="https://image.tmdb.org/t/p/w342<%= series.poster_path %>"
+                          alt="<%= series.name %> poster"
+                          class="featured-poster"
+                        >
+                      <% } %>
+
+                      <div class="featured-copy">
+                        <div class="eyebrow">Featured Now</div>
+                        <h2><%= series.name %></h2>
+                        <p>
+                          <%= series.overview ? series.overview.slice(0, 180) + (series.overview.length > 180 ? '...' : '') : 'Discover ratings, reviews, and details for this series.' %>
+                        </p>
+                        <div class="featured-meta">
+                          <span>
+                            <i class="bi bi-calendar3"></i>
+                            <%= series.first_air_date ? series.first_air_date.split('-')[0] : 'N/A' %>
+                          </span>
+                          <span>
+                            <i class="bi bi-star-fill"></i>
+                            <%= series.vote_average ? series.vote_average.toFixed(1) : '0.0' %>
+                          </span>
+                        </div>
+                        <a href="/series/<%= series.id %>" class="btn btn-primary">
+                          <i class="bi bi-eye me-1"></i> View Details
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              <% }) %>
+            </div>
+
+            <button class="carousel-control-prev" type="button" data-bs-target="#homeSeriesCarousel" data-bs-slide="prev" aria-label="Previous series">
+              <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+            </button>
+            <button class="carousel-control-next" type="button" data-bs-target="#homeSeriesCarousel" data-bs-slide="next" aria-label="Next series">
+              <span class="carousel-control-next-icon" aria-hidden="true"></span>
+            </button>
+          </div>
+        </section>
+      <% } %>
+
+      <% if (surpriseSeries.length > 0) { %>
+        <section class="random-movies-section" aria-label="Random series recommendations">
+          <div class="section-header compact-section-header">
+            <div>
+              <div class="eyebrow">Fresh Mix</div>
+              <h1 class="random-section-title">Surprise Picks</h1>
+              <p class="page-subtitle">A rotating set of well-loved TV shows from different corners of the library.</p>
+            </div>
+          </div>
+
+          <div class="random-movie-grid">
+            <% for (let series of surpriseSeries) { %>
+              <article class="movie-card random-movie-card">
+                <div class="poster-frame">
+                  <% if (series.poster_path) { %>
+                    <img
+                      src="https://image.tmdb.org/t/p/w500<%= series.poster_path %>"
+                      class="movie-img"
+                      alt="<%= series.name %> poster"
+                    >
+                  <% } else { %>
+                    <div class="poster-placeholder">
+                      <i class="bi bi-tv animate-flicker"></i>
+                    </div>
+                  <% } %>
+                </div>
+                <div class="movie-card-body">
+                  <div class="d-flex justify-content-between align-items-start gap-3">
+                    <div>
+                      <h2 class="movie-title">
+                        <%= series.name %>
+                      </h2>
+                      <div class="movie-meta">
+                        <%= series.first_air_date ? series.first_air_date.split('-')[0] : 'N/A' %>
+                      </div>
+                    </div>
+                    <span class="rating-pill">
+                      <i class="bi bi-star-fill"></i>
+                      <%= series.avgRating ? series.avgRating.toFixed(1) : '0.0' %>
+                    </span>
+                  </div>
+                  <a href="/series/<%= series.id %>" class="btn btn-primary mt-auto">
+                    <i class="bi bi-eye me-1"></i> View Details
+                  </a>
+                </div>
+              </article>
+            <% } %>
+          </div>
+        </section>
+      <% } %>
+
+      <section class="section-header">
+        <div>
+          <div class="eyebrow">Wysteria Library</div>
+          <h1 class="page-title"><%= pageTitle || 'Browse TV Series' %></h1>
+          <p class="page-subtitle"><%= pageSubtitle || 'Track shows, write thoughts, and stream episodes.' %></p>
+        </div>
+      </section>
+
+      <% if (allSeries.length === 0) { %>
+        <div class="empty-state">
+          <i class="bi bi-tv fs-1 text-warning"></i>
+          <h2 class="h4 mt-3">No series found</h2>
+          <p class="text-muted mb-3">Try another search.</p>
+        </div>
+      <% } %>
+      <section class="movie-grid" aria-label="TV Series">
+        <% for (let series of allSeries) { %>
+          <article class="movie-card">
+            <div class="poster-frame">
+              <% if (series.poster_path) { %>
+                <img
+                  src="https://image.tmdb.org/t/p/w500<%= series.poster_path %>"
+                  class="movie-img"
+                  alt="<%= series.name %> poster"
+                >
+              <% } else { %>
+                <div class="poster-placeholder">
+                  <i class="bi bi-tv"></i>
+                </div>
+              <% } %>
+            </div>
+            <div class="movie-card-body">
+              <div class="d-flex justify-content-between align-items-start gap-3">
+                <div>
+                  <h2 class="movie-title">
+                    <%= series.name %>
+                  </h2>
+                  <div class="movie-meta">
+                    <%= series.first_air_date ? series.first_air_date.split('-')[0] : 'N/A' %>
+                  </div>
+                </div>
+                <span class="rating-pill">
+                  <i class="bi bi-star-fill"></i>
+                  <%= series.avgRating ? series.avgRating.toFixed(1) : '0.0' %>
+                </span>
+              </div>
+              <a href="/series/<%= series.id %>" class="btn btn-primary mt-auto">
+                <i class="bi bi-eye me-1"></i> View Details
+              </a>
+            </div>
+          </article>
+        <% } %>
+      </section>
+    </div>
+  </main>
+  <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.min.js"></script>
+</body>
+</html>

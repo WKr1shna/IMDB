@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title><%= movie.title %> | Wysteria</title>
+  <title><%= series.name %> | Wysteria</title>
   <link rel="preconnect" href="https://cdn.jsdelivr.net">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
@@ -74,15 +74,15 @@
       <div class="detail-layout">
         <aside class="detail-poster-panel">
           <div class="poster-frame">
-            <% if (movie.poster_path) { %>
+            <% if (series.poster_path) { %>
               <img
-                src="https://image.tmdb.org/t/p/w500<%= movie.poster_path %>"
+                src="https://image.tmdb.org/t/p/w500<%= series.poster_path %>"
                 class="detail-poster"
-                alt="<%= movie.title %> poster"
+                alt="<%= series.name %> poster"
               >
             <% } else { %>
               <div class="poster-placeholder">
-                <i class="bi bi-film"></i>
+                <i class="bi bi-tv"></i>
               </div>
             <% } %>
           </div>
@@ -90,10 +90,10 @@
 
         <section>
           <div class="detail-content">
-            <div class="eyebrow">Movie Details</div>
-            <h1 class="page-title"><%= movie.title %></h1>
+            <div class="eyebrow">TV Series Details</div>
+            <h1 class="page-title"><%= series.name %></h1>
             <p class="page-subtitle mb-4">
-              <%= movie.overview || 'No overview available.' %>
+              <%= series.overview || 'No overview available.' %>
             </p>
 
             <div class="d-flex flex-wrap gap-2 mb-4">
@@ -103,26 +103,32 @@
               </span>
               <span class="btn btn-outline-light disabled">
                 <i class="bi bi-calendar3 me-1"></i>
-                <%= movie.release_date ? movie.release_date.split('-')[0] : 'N/A' %>
+                <%= series.first_air_date ? series.first_air_date.split('-')[0] : 'N/A' %>
               </span>
               <span class="btn btn-outline-light disabled">
                 <i class="bi bi-chat-left-text me-1"></i>
                 <%= reviews.length %>
               </span>
+              <% if (series.number_of_seasons) { %>
+                <span class="btn btn-outline-light disabled">
+                  <i class="bi bi-layer-backward me-1"></i>
+                  <%= series.number_of_seasons %> Seasons
+                </span>
+              <% } %>
             </div>
 
             <div class="d-flex flex-wrap align-items-center gap-2">
-              <a href="/watch/<%= movie.id %>" class="btn btn-danger">
+              <a href="/watch-series/<%= series.id %>" class="btn btn-danger">
                 <i class="bi bi-play-circle me-1"></i>
-                Watch Movie
+                Watch Series
               </a>
 
-               <% if (watchlistMovie) { %>
+              <% if (watchlistMovie) { %>
                 <form action="/watchlist/add" method="POST" class="m-0">
-                  <input type="hidden" name="tmdbId" value="<%= movie.id %>">
-                  <input type="hidden" name="title" value="<%= movie.title %>">
-                  <input type="hidden" name="posterPath" value="<%= movie.poster_path || '' %>">
-                  <input type="hidden" name="mediaType" value="movie">
+                  <input type="hidden" name="tmdbId" value="<%= series.id %>">
+                  <input type="hidden" name="title" value="<%= series.name %>">
+                  <input type="hidden" name="posterPath" value="<%= series.poster_path || '' %>">
+                  <input type="hidden" name="mediaType" value="tv">
                   <label for="watchStatus" class="visually-hidden">Watchlist status</label>
                   <select
                     id="watchStatus"
@@ -140,11 +146,11 @@
                 </form>
               <% } else { %>
                 <form action="/watchlist/add" method="POST" class="m-0">
-                  <input type="hidden" name="tmdbId" value="<%= movie.id %>">
-                  <input type="hidden" name="title" value="<%= movie.title %>">
-                  <input type="hidden" name="posterPath" value="<%= movie.poster_path || '' %>">
+                  <input type="hidden" name="tmdbId" value="<%= series.id %>">
+                  <input type="hidden" name="title" value="<%= series.name %>">
+                  <input type="hidden" name="posterPath" value="<%= series.poster_path || '' %>">
                   <input type="hidden" name="status" value="Plan to Watch">
-                  <input type="hidden" name="mediaType" value="movie">
+                  <input type="hidden" name="mediaType" value="tv">
                   <button class="btn btn-warning">
                     <i class="bi bi-bookmark-plus me-1"></i>
                     Add to Watchlist
@@ -152,7 +158,7 @@
                 </form>
               <% } %>
 
-              <a href="/" class="btn btn-outline-light">
+              <a href="/series" class="btn btn-outline-light">
                 <i class="bi bi-arrow-left me-1"></i>
                 Back
               </a>
@@ -163,7 +169,7 @@
             <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
               <div>
                 <div class="eyebrow">Your Review</div>
-                <h2 class="h4 mb-1"><%= userReview ? 'Edit your rating' : 'Rate this movie' %></h2>
+                <h2 class="h4 mb-1"><%= userReview ? 'Edit your rating' : 'Rate this series' %></h2>
                 <p class="text-muted mb-0">One review per browser. You can update it anytime.</p>
               </div>
               <% if (userReview) { %>
@@ -171,7 +177,7 @@
               <% } %>
             </div>
 
-            <form action="/movie/<%= movie.id %>/review" method="POST">
+            <form action="/series/<%= series.id %>/review" method="POST">
               <fieldset class="rating-stars">
                 <legend class="rating-legend">Choose your rating</legend>
 

@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Watching <%= series.name %> - Season <%= currentSeason %>, Episode <%= currentEpisode %> | Wysteria</title>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+  <link href="/styles.css" rel="stylesheet">
+  <style>
+    .watch-layout {
+      display: grid;
+      grid-template-columns: 3fr 1fr;
+      gap: 24px;
+    }
+    @media (max-width: 991px) {
+      .watch-layout {
+        grid-template-columns: 1fr;
+      }
+    }
+    .episode-sidebar {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 20px;
+      backdrop-filter: blur(10px);
+    }
+    .episode-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(50px, 1fr));
+      gap: 8px;
+      max-height: 400px;
+      overflow-y: auto;
+      padding-right: 4px;
+    }
+    .episode-grid::-webkit-scrollbar {
+      width: 6px;
+    }
+    .episode-grid::-webkit-scrollbar-track {
+      background: rgba(255, 255, 255, 0.02);
+    }
+    .episode-grid::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 3px;
+    }
+    .episode-grid::-webkit-scrollbar-thumb:hover {
+      background: rgba(255, 255, 255, 0.2);
+    }
+  </style>
+</head>
+<body>
+  <%- include('./navbar.ejs') %>
+
+  <% 
+    const activeSeason = series.seasons.find(s => s.season_number === currentSeason) || series.seasons.find(s => s.season_number > 0) || series.seasons[0];
+    const episodeCount = activeSeason ? activeSeason.episode_count : 0;
+  %>
+
+  <main class="page-shell">
+    <div class="container">
+      <div class="mb-4">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb mb-2">
+            <li class="breadcrumb-item"><a href="/series" class="text-muted text-decoration-none">Series</a></li>
+            <li class="breadcrumb-item"><a href="/series/<%= series.id %>" class="text-muted text-decoration-none"><%= series.name %></a></li>
+            <li class="breadcrumb-item active text-warning" aria-current="page">Season <%= currentSeason %>, Episode <%= currentEpisode %></li>
+          </ol>
+        </nav>
+        <h1 class="page-title h2"><%= series.name %></h1>
+        <p class="text-muted mb-0">Playing Season <%= currentSeason %>, Episode <%= currentEpisode %>: <%= activeSeason ? activeSeason.name : '' %></p>
+      </div>
+
+      <div class="watch-layout">
+        <!-- Video Player Section -->
+        <div class="video-container">
+          <div class="ratio ratio-16x9 border border-secondary rounded overflow-hidden shadow-lg">
+            <iframe
+              src="https://vidking.net/embed/tv/<%= series.id %>/<%= currentSeason %>/<%= currentEpisode %>"
+              frameborder="0"
+              allowfullscreen
+              allow="fullscreen"
+              referrerpolicy="origin"
+            ></iframe>
+          </div>
+        </div>
+
+        <!-- Season and Episode Selector Sidebar -->
+        <div class="episode-sidebar">
+          <h2 class="h5 mb-3 text-light"><i class="bi bi-collection-play me-2 text-warning"></i>Episodes</h2>
+          
+          <div class="mb-3">
+            <label for="seasonSelect" class="form-label text-muted small">Select Season</label>
+            <select id="seasonSelect" class="form-select bg-dark text-light border-secondary">
+              <% series.seasons.forEach((season) => { %>
+                <% if (season.season_number > 0) { %>
+                  <option value="<%= season.season_number %>" <%= currentSeason === season.season_number ? 'selected' : '' %>>
+                    <%= season.name %> (<%= season.episode_count %> eps)
+                  </option>
+                <% } %>
+              <% }) %>
+            </select>
+          </div>
+
+          <label class="form-label text-muted small">Select Episode</label>
+          <div class="episode-grid">
+            <% for (let ep = 1; ep <= episodeCount; ep++) { %>
+              <a 
+                href="/watch-series/<%= series.id %>?season=<%= currentSeason %>&episode=<%= ep %>" 
+                class="btn <%= currentEpisode === ep ? 'btn-danger' : 'btn-outline-light' %> btn-sm d-flex align-items-center justify-content-center"
+                style="height: 38px;"
+              >
+                <%= ep %>
+              </a>
+            <% } %>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.min.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const seasonSelect = document.getElementById('seasonSelect');
+      if (seasonSelect) {
+        seasonSelect.addEventListener('change', function() {
+          window.location.href = `/watch-series/<%= series.id %>?season=${this.value}&episode=1`;
+        });
+      }
+    });
+  </script>
+</body>
+</html>

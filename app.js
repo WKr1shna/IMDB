@@ -3,6 +3,7 @@ const bcrypt = require('bcrypt');
 const mongoose = require('mongoose');
 const path = require('path');
 const session=require('express-session')
+const MongoStore = require('connect-mongo');
 const User = require('./models/user');
 const Review=require('./models/review');
 const Watchlist=require('./models/watchlist')
@@ -29,19 +30,19 @@ function shuffleMovies(movies) {
         .map(({ movie }) => movie);
 }
 
-async function addReviewStats(movies) {
-    for (let movie of movies) {
-        const reviews = await Review.find({ tmdbId: Number(movie.id) });
-        movie.numReviews = reviews.length;
+async function addReviewStats(items, mediaType = 'movie') {
+    for (let item of items) {
+        const reviews = await Review.find({ tmdbId: Number(item.id), mediaType: mediaType });
+        item.numReviews = reviews.length;
         if (reviews.length > 0) {
             const total = reviews.reduce((sum, review) => sum + review.rating, 0);
-            movie.avgRating = total / reviews.length;
+            item.avgRating = total / reviews.length;
         }
         else {
-            movie.avgRating = 0;
+            item.avgRating = 0;
         }
     }
-    return movies;
+    return items;
 }
 
 async function getRandomRelevantMovies() {
@@ -81,7 +82,46 @@ async function getRandomRelevantMovies() {
 
     return addReviewStats(shuffleMovies([...moviesById.values()]).slice(0, 8));
 }
-mongoose.connect('mongodb://127.0.0.1:27017/Movies')
+
+async function getRandomRelevantSeries() {
+    const randomPage = Math.floor(Math.random() * 8) + 1;
+    const discoveryRequests = [
+        axios.get('https://api.themoviedb.org/3/tv/top_rated', {
+            params: {
+                ...tmdbParams(),
+                page: randomPage
+            }
+        }),
+        axios.get('https://api.themoviedb.org/3/trending/tv/week', {
+            params: tmdbParams()
+        }),
+        axios.get('https://api.themoviedb.org/3/discover/tv', {
+            params: {
+                ...tmdbParams(),
+                sort_by: 'popularity.desc',
+                'vote_count.gte': 100,
+                page: 1
+            }
+        })
+    ];
+
+    const responses = await Promise.all(discoveryRequests);
+    const seriesById = new Map();
+
+    responses.forEach(response => {
+        if (response.data && response.data.results) {
+            response.data.results.forEach(series => {
+                if (series.poster_path && !seriesById.has(series.id)) {
+                    seriesById.set(series.id, series);
+                }
+            });
+        }
+    });
+
+    return addReviewStats(shuffleMovies([...seriesById.values()]).slice(0, 8), 'tv');
+}
+const dbUrl = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/Movies';
+mongoose.connect(dbUrl)
 
 
 .then(function () {
@@ -93,7 +133,10 @@ mongoose.connect('mongodb://127.0.0.1:27017/Movies')
 app.use(session({
     secret:'secretkey',
     resave:false,
-    saveUninitialized:false
+    saveUninitialized:false,
+    store: MongoStore.create({
+        mongoUrl: dbUrl
+    })
 }))
 app.use((req, res, next) => {
     res.locals.currentPath = req.path;
@@ -237,17 +280,19 @@ app.get('/movie/:id',isloggedin,async(req,res)=>{
             }
     })
     const watchlistMovie= await Watchlist.findOne({
-        userId:req.session.userID,
-        tmdbId:Number(req.params.id)
+        userId:req.session.userId,
+        tmdbId:Number(req.params.id),
+        mediaType:'movie'
     })
         const movie=response.data;
         const reviews=await Review.find({
             tmdbId:Number(req.params.id),
-
+            mediaType:'movie'
         }).populate('userId');
         const userReview = await Review.findOne({
             userId: req.session.userId,
-            tmdbId: Number(req.params.id)
+            tmdbId: Number(req.params.id),
+            mediaType:'movie'
         });
         res.render('show',{
             movie,
@@ -265,7 +310,8 @@ app.post('/movie/:id/review',isloggedin,async(req,res)=>{
     try{
         const existingreview=await Review.findOne({
             userId:req.session.userId,
-            tmdbId:Number(req.params.id)
+            tmdbId:Number(req.params.id),
+            mediaType:'movie'
         });
         if(existingreview){
             existingreview.rating=req.body.rating;
@@ -277,7 +323,8 @@ app.post('/movie/:id/review',isloggedin,async(req,res)=>{
                 userId:req.session.userId,
                 tmdbId:Number(req.params.id),
                 rating:req.body.rating,
-                comment:req.body.comment
+                comment:req.body.comment,
+                mediaType:'movie'
             })
         }
         res.redirect('/movie/' + req.params.id);
@@ -301,10 +348,12 @@ app.get('/watchlist',isloggedin,async(req,res)=>{
 })
 app.post('/watchlist/add',isloggedin, async(req,res)=>{
     try{
-        const{tmdbId,title,posterPath,status}=req.body
+        const{tmdbId,title,posterPath,status,mediaType}=req.body
+        const resolvedMediaType = mediaType || 'movie';
         const existing=await Watchlist.findOne({
             userId:req.session.userId,
-            tmdbId:Number(tmdbId)
+            tmdbId:Number(tmdbId),
+            mediaType:resolvedMediaType
         })
         if(existing){
             existing.status=status;
@@ -316,10 +365,18 @@ app.post('/watchlist/add',isloggedin, async(req,res)=>{
                 tmdbId:Number(tmdbId),
                 title,
                 posterPath,
-                status
+                status,
+                mediaType:resolvedMediaType
             })
         }
-        res.redirect('/movie/'+tmdbId);
+        const referer = req.get('referer') || '';
+        if (referer.includes('/watchlist')) {
+            res.redirect('/watchlist');
+        } else if (resolvedMediaType === 'tv') {
+            res.redirect('/series/'+tmdbId);
+        } else {
+            res.redirect('/movie/'+tmdbId);
+        }
     }
     catch(err){
         console.log(err);
@@ -396,6 +453,135 @@ app.get('/logout',(req,res)=>{
         res.redirect('/')
     })
 })
+app.get('/series', isloggedin, async (req, res)=> {
+    try {
+        const search = req.query.q;
+        let allSeries=[];
+        let randomSeries=[];
+        let pageTitle = 'Browse TV Series';
+        let pageSubtitle = 'Track shows, write thoughts, and stream episodes.';
+
+        if (search) {
+            const response = await axios.get(
+            'https://api.themoviedb.org/3/search/tv',{
+            params: {
+                    api_key: process.env.TMDB_API_KEY,
+                    query: search
+                }})
+            allSeries=response.data.results || [];
+            await addReviewStats(allSeries, 'tv');
+            pageTitle = 'Search results for "' + search + '"';
+            pageSubtitle = allSeries.length + ' TV shows found';
+        } 
+        else {
+            const response = await axios.get(
+                'https://api.themoviedb.org/3/tv/popular',
+                {
+                    params: {
+                        api_key: process.env.TMDB_API_KEY
+                    }
+                }
+            );
+            allSeries = response.data.results || [];
+            await addReviewStats(allSeries, 'tv');
+            randomSeries = await getRandomRelevantSeries();
+        }
+
+        res.render('series', {
+            allSeries: allSeries,
+            randomSeries: randomSeries,
+            pageTitle: pageTitle,
+            pageSubtitle: pageSubtitle
+        });
+    } catch (err) {
+        console.log(err);
+        res.send('Something went wrong');
+    }
+});
+
+app.get('/series/:id', isloggedin, async (req, res) => {
+    try {
+        const response = await axios.get(`https://api.themoviedb.org/3/tv/${req.params.id}`, {
+            params: {
+                api_key: process.env.TMDB_API_KEY
+            }
+        });
+        const watchlistMovie = await Watchlist.findOne({
+            userId: req.session.userId,
+            tmdbId: Number(req.params.id),
+            mediaType: 'tv'
+        });
+        const series = response.data;
+        const reviews = await Review.find({
+            tmdbId: Number(req.params.id),
+            mediaType: 'tv'
+        }).populate('userId');
+        const userReview = await Review.findOne({
+            userId: req.session.userId,
+            tmdbId: Number(req.params.id),
+            mediaType: 'tv'
+        });
+        res.render('show_series', {
+            series,
+            reviews,
+            userReview,
+            watchlistMovie
+        });
+    } catch (err) {
+        console.log(err);
+        res.send("Series not found");
+    }
+});
+
+app.post('/series/:id/review', isloggedin, async (req, res) => {
+    try {
+        const existingreview = await Review.findOne({
+            userId: req.session.userId,
+            tmdbId: Number(req.params.id),
+            mediaType: 'tv'
+        });
+        if (existingreview) {
+            existingreview.rating = req.body.rating;
+            existingreview.comment = req.body.comment;
+            await existingreview.save();
+        } else {
+            await Review.create({
+                userId: req.session.userId,
+                tmdbId: Number(req.params.id),
+                rating: req.body.rating,
+                comment: req.body.comment,
+                mediaType: 'tv'
+            });
+        }
+        res.redirect('/series/' + req.params.id);
+    } catch (err) {
+        console.log(err);
+        res.send('Could not save review');
+    }
+});
+
+app.get('/watch-series/:id', isloggedin, async (req, res) => {
+    try {
+        const response = await axios.get(`https://api.themoviedb.org/3/tv/${req.params.id}`, {
+            params: {
+                api_key: process.env.TMDB_API_KEY
+            }
+        });
+        const series = response.data;
+        const currentSeason = Number(req.query.season) || 1;
+        const currentEpisode = Number(req.query.episode) || 1;
+        
+        res.render('watch_series', {
+            series,
+            currentSeason,
+            currentEpisode
+        });
+    } catch (err) {
+        console.log(err);
+        res.send('Cannot play series');
+    }
+});
+
 app.listen(4444, function () {
     console.log('server has started on port 4444');
 });
