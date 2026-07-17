@@ -50,16 +50,44 @@
 
       <div class="navbar-actions d-flex flex-wrap align-items-center gap-2">
         <% if (typeof currentUser !== 'undefined' && currentUser) { %>
-          <a href="/watchlist" class="btn btn-outline-light">
-            <i class="bi bi-bookmark-heart me-1"></i> Watchlist
-          </a>
-          <span class="navbar-text text-light me-lg-1">
-            <i class="bi bi-person-circle me-1"></i>
-            <%= currentUser.username %>
-          </span> 
-          <a href="/logout" class="btn btn-primary">
-            Logout
-          </a>
+          <div class="dropdown me-lg-2">
+            <button class="btn btn-link text-light p-0 border-0 d-flex align-items-center gap-2 dropdown-toggle-custom" type="button" id="profileDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+              <div class="avatar-circle bg-warning text-dark d-flex align-items-center justify-content-center fw-bold rounded-circle" style="width: 38px; height: 38px; font-size: 1.1rem; border: 2px solid rgba(255,255,255,0.2);">
+                <%= currentUser.username.charAt(0).toUpperCase() %>
+              </div>
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end profile-dropdown-menu p-3" aria-labelledby="profileDropdown" style="min-width: 280px; background: #181824; border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; color: #fff; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
+              <li class="px-2 pb-3 mb-2 border-bottom border-secondary">
+                <div class="fw-bold text-warning fs-5"><%= currentUser.username %></div>
+                <div class="text-light-50 small text-truncate" style="opacity: 0.7;"><%= currentUser.email %></div>
+              </li>
+              <li>
+                <a class="dropdown-item d-flex align-items-center gap-3 py-2 px-3 rounded-2 text-light" href="/profile">
+                  <i class="bi bi-person fs-5"></i> Profile
+                </a>
+              </li>
+              <li>
+                <a class="dropdown-item d-flex align-items-center gap-3 py-2 px-3 rounded-2 text-light" href="/continue-watching">
+                  <i class="bi bi-clock-history fs-5"></i> Continue Watching
+                </a>
+              </li>
+              <li>
+                <a class="dropdown-item d-flex align-items-center gap-3 py-2 px-3 rounded-2 text-light" href="/watchlist">
+                  <i class="bi bi-heart fs-5"></i> Watch List
+                </a>
+              </li>
+              <li>
+                <a class="dropdown-item d-flex align-items-center gap-3 py-2 px-3 rounded-2 text-light" href="/settings">
+                  <i class="bi bi-gear fs-5"></i> Settings
+                </a>
+              </li>
+              <li class="mt-3 pt-2 border-top border-secondary d-flex justify-content-end">
+                <a href="/logout" class="btn btn-link text-light text-decoration-none p-0 d-flex align-items-center gap-1 small" style="opacity: 0.85;">
+                  Logout <i class="bi bi-box-arrow-right"></i>
+                </a>
+              </li>
+            </ul>
+          </div>
           
         <% } else { %>
           <a href="/login" class="btn btn-outline-light">

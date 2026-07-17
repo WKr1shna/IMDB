@@ -627,6 +627,59 @@ app.get('/watch-series/:id', isloggedin, async (req, res) => {
         res.send('Cannot play series');
     }
 });
+app.get('/profile', isloggedin, async (req, res) => {
+    try {
+        const reviewsCount = await Review.countDocuments({ userId: req.session.userId });
+        const watchlistCount = await Watchlist.countDocuments({ userId: req.session.userId });
+        
+        res.render('profile', {
+            reviewsCount,
+            watchlistCount,
+            pageTitle: 'My Profile'
+        });
+    } catch (err) {
+        console.log(err);
+        res.send('Could not load profile');
+    }
+});
+
+app.get('/continue-watching', isloggedin, async (req, res) => {
+    try {
+        const movies = await Watchlist.find({
+            userId: req.session.userId,
+            status: 'Watching'
+        });
+        res.render('continue_watching', { movies });
+    } catch (err) {
+        console.log(err);
+        res.send('Could not load continue watching list');
+    }
+});
+
+app.get('/settings', isloggedin, (req, res) => {
+    res.render('settings', { error: null, success: null });
+});
+
+app.post('/settings/update-password', isloggedin, async (req, res) => {
+    const { currentPassword, newPassword } = req.body;
+    try {
+        const user = await User.findById(req.session.userId);
+        const match = await bcrypt.compare(currentPassword, user.password);
+        if (!match) {
+            return res.render('settings', { error: 'Current password does not match', success: null });
+        }
+        if (newPassword.length < 8) {
+            return res.render('settings', { error: 'New password must be at least 8 characters long', success: null });
+        }
+        user.password = await bcrypt.hash(newPassword, 10);
+        await user.save();
+        res.render('settings', { error: null, success: 'Password updated successfully!' });
+    } catch (err) {
+        console.log(err);
+        res.render('settings', { error: 'Failed to update password', success: null });
+    }
+});
+
 if (!process.env.VERCEL) {
     app.listen(4444, function () {
         console.log('server has started on port 4444');

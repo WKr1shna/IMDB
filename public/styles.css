@@ -670,3 +670,31 @@ a {
     width: 42px;
   }
 }
+
+/* Profile Dropdown Custom Styling */
+.profile-dropdown-menu {
+  background: #181824 !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.5) !important;
+}
+
+.profile-dropdown-menu .dropdown-item {
+  color: #c6d0dc !important;
+  font-weight: 500;
+  border-radius: 30px !important; /* Pill shape like screenshot */
+  background: rgba(255, 255, 255, 0.05) !important;
+  margin-bottom: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.03) !important;
+}
+
+.profile-dropdown-menu .dropdown-item:hover {
+  background: rgba(255, 255, 255, 0.1) !important;
+  color: #fff !important;
+  transform: translateY(-1px);
+  border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+.dropdown-toggle-custom::after {
+  display: none !important; /* Hide default Bootstrap caret arrow */
+}
