@@ -146,59 +146,61 @@
       </section>
 
       <!-- Advanced Filter Panel -->
-      <div class="filter-panel mb-5 p-4 rounded-3" style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.05); backdrop-filter: blur(10px);">
-        <form action="/series" method="GET" class="row g-3 align-items-end">
-          <div class="col-12 col-md-4 col-lg-3">
-            <label class="form-label text-muted fw-bold small uppercase-label" style="font-size: 0.75rem; letter-spacing: 1px;">Search</label>
-            <div class="input-group">
-              <span class="input-group-text bg-dark border-secondary text-muted"><i class="bi bi-search"></i></span>
-              <input type="text" name="q" value="<%= searchQuery || '' %>" class="form-control bg-dark text-light border-secondary" placeholder="Search series...">
+      <div class="collapse <%= (selectedGenre || selectedYear || searchQuery || showFilters) ? 'show' : '' %>" id="filter-panel-collapse">
+        <div class="filter-panel mb-5 p-4 rounded-3" style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.05); backdrop-filter: blur(10px);">
+          <form action="/series" method="GET" class="row g-3 align-items-end">
+            <div class="col-12 col-md-4 col-lg-3">
+              <label class="form-label text-muted fw-bold small uppercase-label" style="font-size: 0.75rem; letter-spacing: 1px;">Search</label>
+              <div class="input-group">
+                <span class="input-group-text bg-dark border-secondary text-muted"><i class="bi bi-search"></i></span>
+                <input type="text" name="q" value="<%= searchQuery || '' %>" class="form-control bg-dark text-light border-secondary" placeholder="Search series...">
+              </div>
             </div>
-          </div>
-          
-          <div class="col-6 col-md-3 col-lg-3">
-            <label class="form-label text-muted fw-bold small uppercase-label" style="font-size: 0.75rem; letter-spacing: 1px;">Genres</label>
-            <select name="genre" class="form-select bg-dark text-light border-secondary" onchange="this.form.submit()">
-              <option value="">Any</option>
-              <option value="10759" <%= selectedGenre === '10759' ? 'selected' : '' %>>Action & Adventure</option>
-              <option value="16" <%= selectedGenre === '16' ? 'selected' : '' %>>Animation</option>
-              <option value="35" <%= selectedGenre === '35' ? 'selected' : '' %>>Comedy</option>
-              <option value="80" <%= selectedGenre === '80' ? 'selected' : '' %>>Crime</option>
-              <option value="99" <%= selectedGenre === '99' ? 'selected' : '' %>>Documentary</option>
-              <option value="18" <%= selectedGenre === '18' ? 'selected' : '' %>>Drama</option>
-              <option value="10751" <%= selectedGenre === '10751' ? 'selected' : '' %>>Family</option>
-              <option value="10762" <%= selectedGenre === '10762' ? 'selected' : '' %>>Kids</option>
-              <option value="9648" <%= selectedGenre === '9648' ? 'selected' : '' %>>Mystery</option>
-              <option value="10763" <%= selectedGenre === '10763' ? 'selected' : '' %>>News</option>
-              <option value="10764" <%= selectedGenre === '10764' ? 'selected' : '' %>>Reality</option>
-              <option value="10765" <%= selectedGenre === '10765' ? 'selected' : '' %>>Sci-Fi & Fantasy</option>
-              <option value="10766" <%= selectedGenre === '10766' ? 'selected' : '' %>>Soap</option>
-              <option value="10767" <%= selectedGenre === '10767' ? 'selected' : '' %>>Talk</option>
-              <option value="10768" <%= selectedGenre === '10768' ? 'selected' : '' %>>War & Politics</option>
-              <option value="37" <%= selectedGenre === '37' ? 'selected' : '' %>>Western</option>
-            </select>
-          </div>
-          
-          <div class="col-6 col-md-2 col-lg-2">
-            <label class="form-label text-muted fw-bold small uppercase-label" style="font-size: 0.75rem; letter-spacing: 1px;">Year</label>
-            <select name="year" class="form-select bg-dark text-light border-secondary" onchange="this.form.submit()">
-              <option value="">Any</option>
-              <% const currentYear = new Date().getFullYear(); %>
-              <% for (let y = currentYear; y >= 2000; y--) { %>
-                <option value="<%= y %>" <%= selectedYear === String(y) ? 'selected' : '' %>><%= y %></option>
-              <% } %>
-            </select>
-          </div>
-          
-          <div class="col-12 col-md-3 col-lg-3">
-            <label class="form-label text-muted fw-bold small uppercase-label" style="font-size: 0.75rem; letter-spacing: 1px;">Sort</label>
-            <select name="sort" class="form-select bg-dark text-light border-secondary" onchange="this.form.submit()">
-              <option value="popularity.desc" <%= selectedSort === 'popularity.desc' ? 'selected' : '' %>>Popularity</option>
-              <option value="vote_average.desc" <%= selectedSort === 'vote_average.desc' ? 'selected' : '' %>>Rating</option>
-              <option value="first_air_date.desc" <%= selectedSort === 'first_air_date.desc' ? 'selected' : '' %>>Release Date</option>
-            </select>
-          </div>
-        </form>
+            
+            <div class="col-6 col-md-3 col-lg-3">
+              <label class="form-label text-muted fw-bold small uppercase-label" style="font-size: 0.75rem; letter-spacing: 1px;">Genres</label>
+              <select name="genre" class="form-select bg-dark text-light border-secondary" onchange="this.form.submit()">
+                <option value="">Any</option>
+                <option value="10759" <%= selectedGenre === '10759' ? 'selected' : '' %>>Action & Adventure</option>
+                <option value="16" <%= selectedGenre === '16' ? 'selected' : '' %>>Animation</option>
+                <option value="35" <%= selectedGenre === '35' ? 'selected' : '' %>>Comedy</option>
+                <option value="80" <%= selectedGenre === '80' ? 'selected' : '' %>>Crime</option>
+                <option value="99" <%= selectedGenre === '99' ? 'selected' : '' %>>Documentary</option>
+                <option value="18" <%= selectedGenre === '18' ? 'selected' : '' %>>Drama</option>
+                <option value="10751" <%= selectedGenre === '10751' ? 'selected' : '' %>>Family</option>
+                <option value="10762" <%= selectedGenre === '10762' ? 'selected' : '' %>>Kids</option>
+                <option value="9648" <%= selectedGenre === '9648' ? 'selected' : '' %>>Mystery</option>
+                <option value="10763" <%= selectedGenre === '10763' ? 'selected' : '' %>>News</option>
+                <option value="10764" <%= selectedGenre === '10764' ? 'selected' : '' %>>Reality</option>
+                <option value="10765" <%= selectedGenre === '10765' ? 'selected' : '' %>>Sci-Fi & Fantasy</option>
+                <option value="10766" <%= selectedGenre === '10766' ? 'selected' : '' %>>Soap</option>
+                <option value="10767" <%= selectedGenre === '10767' ? 'selected' : '' %>>Talk</option>
+                <option value="10768" <%= selectedGenre === '10768' ? 'selected' : '' %>>War & Politics</option>
+                <option value="37" <%= selectedGenre === '37' ? 'selected' : '' %>>Western</option>
+              </select>
+            </div>
+            
+            <div class="col-6 col-md-2 col-lg-2">
+              <label class="form-label text-muted fw-bold small uppercase-label" style="font-size: 0.75rem; letter-spacing: 1px;">Year</label>
+              <select name="year" class="form-select bg-dark text-light border-secondary" onchange="this.form.submit()">
+                <option value="">Any</option>
+                <% const currentYear = new Date().getFullYear(); %>
+                <% for (let y = currentYear; y >= 2000; y--) { %>
+                  <option value="<%= y %>" <%= selectedYear === String(y) ? 'selected' : '' %>><%= y %></option>
+                <% } %>
+              </select>
+            </div>
+            
+            <div class="col-12 col-md-3 col-lg-3">
+              <label class="form-label text-muted fw-bold small uppercase-label" style="font-size: 0.75rem; letter-spacing: 1px;">Sort</label>
+              <select name="sort" class="form-select bg-dark text-light border-secondary" onchange="this.form.submit()">
+                <option value="popularity.desc" <%= selectedSort === 'popularity.desc' ? 'selected' : '' %>>Popularity</option>
+                <option value="vote_average.desc" <%= selectedSort === 'vote_average.desc' ? 'selected' : '' %>>Rating</option>
+                <option value="first_air_date.desc" <%= selectedSort === 'first_air_date.desc' ? 'selected' : '' %>>Release Date</option>
+              </select>
+            </div>
+          </form>
+        </div>
       </div>
 
       <% if (allSeries.length === 0) { %>

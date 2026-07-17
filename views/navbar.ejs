@@ -33,10 +33,16 @@
       <form class="d-flex nav-search me-lg-3 mb-3 mb-lg-0" action="<%= currentPath.startsWith('/series') ? '/series' : '/' %>" method="GET">
         <div class="input-group">
           <input class="form-control" type="search" name="q" value="<%= searchQuery || '' %>" placeholder="<%= currentPath.startsWith('/series') ? 'Search series' : 'Search movies' %>" style="border-right: none; background: #1a1a1a; color: #fff; border-color: rgba(255,255,255,0.15);">
-          <a href="<%= currentPath.startsWith('/series') ? '/series' : '/' %>" class="btn btn-outline-secondary d-flex align-items-center" title="Advanced Filters" style="border-left: none; border-color: rgba(255,255,255,0.15); background: #1a1a1a; color: #888;">
-            <i class="bi bi-funnel"></i>
-          </a>
-          <button class="btn btn-outline-light" aria-label="Search">
+          <% if (currentPath === '/' || currentPath === '/series') { %>
+            <button type="button" class="btn btn-outline-secondary d-flex align-items-center" data-bs-toggle="collapse" data-bs-target="#filter-panel-collapse" title="Toggle Filters" style="border-left: none; border-right: none; border-color: rgba(255,255,255,0.15); background: #1a1a1a; color: #888;">
+              <i class="bi bi-funnel"></i>
+            </button>
+          <% } else { %>
+            <a href="<%= currentPath.startsWith('/series') ? '/series?showFilters=true' : '/?showFilters=true' %>" class="btn btn-outline-secondary d-flex align-items-center" title="Advanced Filters" style="border-left: none; border-right: none; border-color: rgba(255,255,255,0.15); background: #1a1a1a; color: #888;">
+              <i class="bi bi-funnel"></i>
+            </a>
+          <% } %>
+          <button class="btn btn-outline-light" aria-label="Search" style="border-left: none;">
             <i class="bi bi-search"></i>
           </button>
         </div>

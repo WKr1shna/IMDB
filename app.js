@@ -214,7 +214,8 @@ app.get('/', async (req, res)=> {
             pageSubtitle: pageSubtitle,
             selectedGenre: genre,
             selectedYear: year,
-            selectedSort: sort
+            selectedSort: sort,
+            showFilters: req.query.showFilters === 'true'
         });
     } catch (err) {
         console.log(err);
@@ -535,7 +536,8 @@ app.get('/series', isloggedin, async (req, res)=> {
             pageSubtitle: pageSubtitle,
             selectedGenre: genre,
             selectedYear: year,
-            selectedSort: sort
+            selectedSort: sort,
+            showFilters: req.query.showFilters === 'true'
         });
     } catch (err) {
         console.log(err);
