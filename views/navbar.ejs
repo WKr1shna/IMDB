@@ -30,12 +30,43 @@
         </li>
       </ul>
 
-      <form class="d-flex nav-search me-lg-3 mb-3 mb-lg-0" action="<%= currentPath.startsWith('/series') ? '/series' : '/' %>" method="GET">
-        <input class="form-control me-2" type="search" name="q" value="<%= searchQuery || '' %>" placeholder="<%= currentPath.startsWith('/series') ? 'Search series' : 'Search movies' %>">
+      <form id="search-form" class="d-flex nav-search me-lg-3 mb-3 mb-lg-0" action="<%= currentPath.startsWith('/series') ? '/series' : '/' %>" method="GET">
+        <select id="search-type" class="form-select me-2 bg-dark text-light border-secondary" style="width: auto; min-width: 105px;">
+          <option value="movie" <%= !currentPath.startsWith('/series') ? 'selected' : '' %>>Movies</option>
+          <option value="series" <%= currentPath.startsWith('/series') ? 'selected' : '' %>>Series</option>
+        </select>
+        <input id="search-input" class="form-control me-2" type="search" name="q" value="<%= searchQuery || '' %>" placeholder="<%= currentPath.startsWith('/series') ? 'Search series' : 'Search movies' %>">
         <button class="btn btn-outline-light" aria-label="Search">
           <i class="bi bi-search"></i>
         </button>
       </form>
+      <script>
+        document.addEventListener('DOMContentLoaded', () => {
+          const searchForm = document.getElementById('search-form');
+          const searchType = document.getElementById('search-type');
+          const searchInput = document.getElementById('search-input');
+          
+          if (searchForm && searchType && searchInput) {
+            searchType.addEventListener('change', () => {
+              if (searchType.value === 'series') {
+                searchInput.placeholder = 'Search series';
+                searchForm.action = '/series';
+              } else {
+                searchInput.placeholder = 'Search movies';
+                searchForm.action = '/';
+              }
+            });
+            
+            searchForm.addEventListener('submit', () => {
+              if (searchType.value === 'series') {
+                searchForm.action = '/series';
+              } else {
+                searchForm.action = '/';
+              }
+            });
+          }
+        });
+      </script>
 
       <div class="navbar-actions d-flex flex-wrap align-items-center gap-2">
         <% if (typeof currentUser !== 'undefined' && currentUser) { %>
