@@ -157,6 +157,10 @@ app.use(async (req, res, next) => {
 app.get('/', async (req, res)=> {
     try {
         const search = req.query.q;
+        const genre = req.query.genre || '';
+        const year = req.query.year || '';
+        const sort = req.query.sort || 'popularity.desc';
+
         let allMovies=[];
         let randomMovies=[];
         let pageTitle = 'Browse Movies';
@@ -164,17 +168,32 @@ app.get('/', async (req, res)=> {
 
         if (search) {
             const response = await axios.get(
-            'https://api.themoviedb.org/3/search/movie',{
-            params: {
+                'https://api.themoviedb.org/3/search/movie', {
+                params: {
                     api_key: process.env.TMDB_API_KEY,
-                    query: search
-                }})
-            allMovies=response.data.results;
+                    query: search,
+                    primary_release_year: year || undefined
+                }
+            });
+            allMovies = response.data.results || [];
             await addReviewStats(allMovies);
             pageTitle = 'Search results for "' + search + '"';
             pageSubtitle = allMovies.length + ' movies found';
-        } 
-        else {
+        } else if (genre || year || sort !== 'popularity.desc') {
+            const response = await axios.get(
+                'https://api.themoviedb.org/3/discover/movie', {
+                params: {
+                    api_key: process.env.TMDB_API_KEY,
+                    with_genres: genre || undefined,
+                    primary_release_year: year || undefined,
+                    sort_by: sort
+                }
+            });
+            allMovies = response.data.results || [];
+            await addReviewStats(allMovies);
+            pageTitle = 'Filtered Movies';
+            pageSubtitle = allMovies.length + ' movies matched your criteria';
+        } else {
             const response = await axios.get(
                 'https://api.themoviedb.org/3/movie/popular',
                 {
@@ -183,7 +202,7 @@ app.get('/', async (req, res)=> {
                     }
                 }
             );
-            allMovies = response.data.results;
+            allMovies = response.data.results || [];
             await addReviewStats(allMovies);
             randomMovies = await getRandomRelevantMovies();
         }
@@ -192,7 +211,10 @@ app.get('/', async (req, res)=> {
             allMovies: allMovies,
             randomMovies: randomMovies,
             pageTitle: pageTitle,
-            pageSubtitle: pageSubtitle
+            pageSubtitle: pageSubtitle,
+            selectedGenre: genre,
+            selectedYear: year,
+            selectedSort: sort
         });
     } catch (err) {
         console.log(err);
@@ -456,6 +478,10 @@ app.get('/logout',(req,res)=>{
 app.get('/series', isloggedin, async (req, res)=> {
     try {
         const search = req.query.q;
+        const genre = req.query.genre || '';
+        const year = req.query.year || '';
+        const sort = req.query.sort || 'popularity.desc';
+
         let allSeries=[];
         let randomSeries=[];
         let pageTitle = 'Browse TV Series';
@@ -463,17 +489,32 @@ app.get('/series', isloggedin, async (req, res)=> {
 
         if (search) {
             const response = await axios.get(
-            'https://api.themoviedb.org/3/search/tv',{
-            params: {
+                'https://api.themoviedb.org/3/search/tv', {
+                params: {
                     api_key: process.env.TMDB_API_KEY,
-                    query: search
-                }})
-            allSeries=response.data.results || [];
+                    query: search,
+                    first_air_date_year: year || undefined
+                }
+            });
+            allSeries = response.data.results || [];
             await addReviewStats(allSeries, 'tv');
             pageTitle = 'Search results for "' + search + '"';
             pageSubtitle = allSeries.length + ' TV shows found';
-        } 
-        else {
+        } else if (genre || year || sort !== 'popularity.desc') {
+            const response = await axios.get(
+                'https://api.themoviedb.org/3/discover/tv', {
+                params: {
+                    api_key: process.env.TMDB_API_KEY,
+                    with_genres: genre || undefined,
+                    first_air_date_year: year || undefined,
+                    sort_by: sort
+                }
+            });
+            allSeries = response.data.results || [];
+            await addReviewStats(allSeries, 'tv');
+            pageTitle = 'Filtered TV Series';
+            pageSubtitle = allSeries.length + ' TV shows matched your criteria';
+        } else {
             const response = await axios.get(
                 'https://api.themoviedb.org/3/tv/popular',
                 {
@@ -491,7 +532,10 @@ app.get('/series', isloggedin, async (req, res)=> {
             allSeries: allSeries,
             randomSeries: randomSeries,
             pageTitle: pageTitle,
-            pageSubtitle: pageSubtitle
+            pageSubtitle: pageSubtitle,
+            selectedGenre: genre,
+            selectedYear: year,
+            selectedSort: sort
         });
     } catch (err) {
         console.log(err);
