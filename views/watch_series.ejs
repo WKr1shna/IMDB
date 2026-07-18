@@ -76,7 +76,7 @@
         <div class="video-container">
           <div class="ratio ratio-16x9 border border-secondary rounded overflow-hidden shadow-lg">
             <iframe
-              src="https://vidsrc.to/embed/tv/<%= series.id %>/<%= currentSeason %>/<%= currentEpisode %>"
+              src="https://www.vidking.net/embed/tv/<%= series.id %>/<%= currentSeason %>/<%= currentEpisode %>?color=ffd166&autoPlay=true&nextEpisode=true&episodeSelector=true"
               frameborder="0"
               allowfullscreen
               allow="fullscreen"
@@ -128,6 +128,39 @@
         seasonSelect.addEventListener('change', function() {
           window.location.href = `/watch-series/<%= series.id %>?season=${this.value}&episode=1`;
         });
+      }
+    });
+
+    window.addEventListener("message", function (event) {
+      if (event.origin !== 'https://www.vidking.net') return;
+      
+      try {
+        const payload = JSON.parse(event.data);
+        if (payload.type === "PLAYER_EVENT" && payload.data) {
+          const { event: playerEvent, currentTime, duration, progress, id, mediaType, season, episode } = payload.data;
+          
+          if (playerEvent === 'timeupdate' || playerEvent === 'pause' || playerEvent === 'ended') {
+            fetch('/api/watch-progress', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                tmdbId: id,
+                mediaType: mediaType,
+                title: '<%= series.name %>',
+                posterPath: '<%= series.poster_path %>',
+                progress: progress,
+                currentTime: currentTime,
+                duration: duration,
+                season: season,
+                episode: episode
+              })
+            }).catch(err => console.error('Failed to report watch progress:', err));
+          }
+        }
+      } catch (e) {
+        // Ignore parsing errors
       }
     });
   </script>

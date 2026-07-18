@@ -33,20 +33,53 @@
     </h1>
 
     <div class="ratio ratio-16x9">
-
-<iframe
-    src="https://vidsrc.to/embed/movie/<%= movie.id %>"
-    frameborder="0"
-    allowfullscreen
-    allow="fullscreen"
-    referrerpolicy="origin"
-  ></iframe>
-
+      <iframe
+        src="https://www.vidking.net/embed/movie/<%= movie.id %>?color=ffd166&autoPlay=true"
+        frameborder="0"
+        allowfullscreen
+        allow="fullscreen"
+        referrerpolicy="origin"
+      ></iframe>
     </div>
 
   </div>
 
 </main>
+
+<script>
+  window.addEventListener("message", function (event) {
+    if (event.origin !== 'https://www.vidking.net') return;
+    
+    try {
+      const payload = JSON.parse(event.data);
+      if (payload.type === "PLAYER_EVENT" && payload.data) {
+        const { event: playerEvent, currentTime, duration, progress, id, mediaType } = payload.data;
+        
+        if (playerEvent === 'timeupdate' || playerEvent === 'pause' || playerEvent === 'ended') {
+          // Throttle network requests slightly by only saving if we are close to integer progress values or on pause/ended
+          // Or send it regularly since it runs in the background. Sending it is simple and safe:
+          fetch('/api/watch-progress', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              tmdbId: id,
+              mediaType: mediaType,
+              title: '<%= movie.title %>',
+              posterPath: '<%= movie.poster_path %>',
+              progress: progress,
+              currentTime: currentTime,
+              duration: duration
+            })
+          }).catch(err => console.error('Failed to report watch progress:', err));
+        }
+      }
+    } catch (e) {
+      // Ignore parsing errors for non-JSON postmessages
+    }
+  });
+</script>
 
 </body>
 </html>

@@ -26,7 +26,7 @@
         <div class="empty-state p-5 text-center rounded-3" style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05);">
           <i class="bi bi-play-circle fs-1 text-warning"></i>
           <h2 class="h4 mt-3 text-light">No items in progress</h2>
-          <p class="text-muted mb-4">Mark movies or series as "Watching" on their details pages to see them here.</p>
+          <p class="text-muted mb-4">Start watching any movie or series to track your progress automatically here.</p>
           <a href="/" class="btn btn-primary"><i class="bi bi-grid-3x3-gap me-1"></i> Browse Library</a>
         </div>
       <% } else { %>
@@ -46,13 +46,19 @@
                   </div>
                 <% } %>
               </div>
-              <div class="movie-card-body">
+              <div class="movie-card-body d-flex flex-column h-100">
                 <h2 class="movie-title"><%= item.title %></h2>
-                <div class="d-flex justify-content-between align-items-center mt-2 small text-muted">
-                  <span class="badge bg-warning text-dark"><%= item.mediaType === 'tv' ? 'Series' : 'Movie' %></span>
-                  <span><i class="bi bi-clock me-1"></i> <%= item.status %></span>
+                <% if (item.mediaType === 'tv') { %>
+                  <div class="small text-muted mb-2">Season <%= item.season %>, Episode <%= item.episode %></div>
+                <% } %>
+                <div class="progress mb-3 bg-dark mt-auto" style="height: 6px; border-radius: 3px;">
+                  <div class="progress-bar bg-warning" role="progressbar" style="width: <%= item.progress %>%;" aria-valuenow="<%= item.progress %>" aria-valuemin="0" aria-valuemax="100"></div>
                 </div>
-                <a href="<%= item.mediaType === 'tv' ? '/watch-series/' + item.tmdbId : '/watch/' + item.tmdbId %>" class="btn btn-primary mt-3 w-100">
+                <div class="d-flex justify-content-between align-items-center small text-muted">
+                  <span class="badge bg-warning text-dark"><%= item.mediaType === 'tv' ? 'Series' : 'Movie' %></span>
+                  <span><%= item.progress ? Math.round(item.progress) : 0 %>% watched</span>
+                </div>
+                <a href="<%= item.mediaType === 'tv' ? '/watch-series/' + item.tmdbId + '?season=' + item.season + '&episode=' + item.episode : '/watch/' + item.tmdbId %>" class="btn btn-primary mt-3 w-100">
                   <i class="bi bi-play-fill me-1"></i> Resume Play
                 </a>
               </div>

@@ -6,9 +6,9 @@ const session=require('express-session')
 const { MongoStore } = require('connect-mongo');
 const User = require('./models/user');
 const Review=require('./models/review');
-const Watchlist=require('./models/watchlist')
+const Watchlist=require('./models/watchlist');
+const WatchProgress = require('./models/watchProgress');
 const axios = require('axios');
-const review = require('./models/review');
 require('dotenv').config();
 const app = express();
 
@@ -645,14 +645,44 @@ app.get('/profile', isloggedin, async (req, res) => {
 
 app.get('/continue-watching', isloggedin, async (req, res) => {
     try {
-        const movies = await Watchlist.find({
-            userId: req.session.userId,
-            status: 'Watching'
-        });
-        res.render('continue_watching', { movies });
+        const progressList = await WatchProgress.find({
+            userId: req.session.userId
+        }).sort({ updatedAt: -1 });
+        res.render('continue_watching', { movies: progressList });
     } catch (err) {
         console.log(err);
         res.send('Could not load continue watching list');
+    }
+});
+
+app.post('/api/watch-progress', isloggedin, async (req, res) => {
+    try {
+        const { tmdbId, mediaType, title, posterPath, progress, currentTime, duration, season, episode } = req.body;
+        await WatchProgress.findOneAndUpdate(
+            {
+                userId: req.session.userId,
+                tmdbId: Number(tmdbId),
+                mediaType
+            },
+            {
+                title,
+                posterPath: posterPath || '',
+                progress: Number(progress) || 0,
+                currentTime: Number(currentTime) || 0,
+                duration: Number(duration) || 0,
+                season: season ? Number(season) : null,
+                episode: episode ? Number(episode) : null,
+                updatedAt: new Date()
+            },
+            {
+                upsert: true,
+                new: true
+            }
+        );
+        res.sendStatus(200);
+    } catch (err) {
+        console.error('Error saving watch progress:', err);
+        res.sendStatus(500);
     }
 });
 
