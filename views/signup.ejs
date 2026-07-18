@@ -55,7 +55,7 @@
             <form action="/signup" method="POST">
 
               <% if(error && !error.includes('Username') && !error.includes('Email') && !error.includes('password') && !error.includes('Password')) { %>
-                <div class="alert alert-danger d-flex align-items-center gap-2 py-2 px-3" role="alert" style="background: rgba(255,95,109,0.1); border-color: rgba(255,95,109,0.3); color: #ff5f6d; border-radius: 8px;">
+                <div class="alert alert-danger d-flex align-items-center gap-2 py-2 px-3" role="alert" style="background: rgba(255,59,48,0.1); border-color: rgba(255,59,48,0.2); color: #FF3B30; border-radius: 8px;">
                   <i class="bi bi-exclamation-circle"></i>
                   <span><%= error %></span>
                 </div>
@@ -115,7 +115,7 @@
                     type="button"
                     class="btn btn-outline-secondary d-flex align-items-center"
                     id="toggle-password"
-                    style="border-left: none; border-color: rgba(255, 255, 255, 0.15); background: #1a1a1a; color: #888;"
+                    style="border-left: none; border-color: rgba(255, 255, 255, 0.08); background: #121212; color: #8A8A8A;"
                   >
                     <i class="bi bi-eye" id="toggle-icon"></i>
                   </button>

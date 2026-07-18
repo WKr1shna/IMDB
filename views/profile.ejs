@@ -20,10 +20,10 @@
         <div class="col-lg-8">
           <section class="form-panel p-5 rounded-3 mb-5" style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.05); backdrop-filter: blur(10px);">
             <div class="text-center mb-4">
-              <div class="avatar-circle bg-warning text-dark d-inline-flex align-items-center justify-content-center fw-bold rounded-circle mb-3" style="width: 80px; height: 80px; font-size: 2.2rem; border: 3px solid rgba(255,255,255,0.2);">
+              <div class="avatar-circle d-inline-flex align-items-center justify-content-center fw-bold rounded-circle mb-3" style="width: 80px; height: 80px; font-size: 2.2rem; border: 1px solid rgba(255,255,255,0.25); background: #ffffff; color: #000000;">
                 <%= currentUser.username.charAt(0).toUpperCase() %>
               </div>
-              <h1 class="page-title text-warning"><%= currentUser.username %></h1>
+              <h1 class="page-title text-white"><%= currentUser.username %></h1>
               <p class="text-muted"><%= currentUser.email %></p>
             </div>
 

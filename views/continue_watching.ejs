@@ -54,10 +54,10 @@
                   <div class="small text-muted mb-2">Season <%= item.season %>, Episode <%= item.episode %></div>
                 <% } %>
                 <div class="progress mb-3 bg-dark mt-auto" style="height: 6px; border-radius: 3px;">
-                  <div class="progress-bar bg-warning" role="progressbar" style="width: <%= item.progress %>%;" aria-valuenow="<%= item.progress %>" aria-valuemin="0" aria-valuemax="100"></div>
+                  <div class="progress-bar bg-white" role="progressbar" style="width: <%= item.progress %>%;" aria-valuenow="<%= item.progress %>" aria-valuemin="0" aria-valuemax="100"></div>
                 </div>
                 <div class="d-flex justify-content-between align-items-center small text-muted">
-                  <span class="badge bg-warning text-dark"><%= item.mediaType === 'tv' ? 'Series' : 'Movie' %></span>
+                  <span class="badge bg-light text-dark"><%= item.mediaType === 'tv' ? 'Series' : 'Movie' %></span>
                   <span><%= item.progress ? Math.round(item.progress) : 0 %>% watched</span>
                 </div>
                 <a href="<%= item.mediaType === 'tv' ? '/watch-series/' + item.tmdbId + '?season=' + item.season + '&episode=' + item.episode : '/watch/' + item.tmdbId %>" class="btn btn-primary mt-3 w-100">

@@ -34,7 +34,7 @@
       <%= movie.title %>
     </h1>
 
-    <div class="ratio ratio-16x9 border border-secondary rounded overflow-hidden shadow-lg">
+    <div class="ratio ratio-16x9 border rounded overflow-hidden shadow-lg" style="border-color: rgba(255, 255, 255, 0.08) !important;">
       <iframe
         id="player-iframe"
         src="<%= providers[0].url %>"
@@ -167,7 +167,7 @@
     const ratioDiv = document.querySelector(".ratio-16x9");
     if (ratioDiv) {
       ratioDiv.innerHTML = `
-        <div class="d-flex flex-column align-items-center justify-content-center text-center p-5 rounded" style="background: rgba(255, 95, 109, 0.08); border: 1px solid rgba(255, 95, 109, 0.2); width: 100%; height: 100%;">
+        <div class="d-flex flex-column align-items-center justify-content-center text-center p-5 rounded" style="background: #0A0A0A; border: 1px solid rgba(255, 255, 255, 0.08); width: 100%; height: 100%;">
           <i class="bi bi-exclamation-octagon fs-1 text-danger mb-3"></i>
           <h3 class="text-light">This title is temporarily unavailable</h3>
           <p class="text-muted small mb-0">Please try again later. We apologize for the inconvenience.</p>

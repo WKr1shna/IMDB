@@ -49,14 +49,20 @@
     .rating-stars label::before {
       content: "\2605";
       margin-right: 4px;
-      color: var(--gold);
+      color: var(--muted);
+      transition: color 160ms ease;
+    }
+
+    .rating-stars input:checked + label::before,
+    .rating-stars label:hover::before {
+      color: #000000;
     }
 
     .rating-stars input:checked + label,
     .rating-stars label:hover {
-      background: linear-gradient(135deg, var(--gold), #fff0bb);
-      border-color: transparent;
-      color: #131721;
+      background: #FFFFFF;
+      border-color: #FFFFFF;
+      color: #000000;
       transform: translateY(-2px);
     }
   </style>
@@ -120,7 +126,7 @@
             </div>
 
             <div class="d-flex flex-wrap align-items-center gap-2">
-              <a href="/watch-series/<%= series.id %>" class="btn btn-danger">
+              <a href="/watch-series/<%= series.id %>" class="btn btn-watch">
                 <i class="bi bi-play-circle me-1"></i>
                 Watch Series
               </a>
