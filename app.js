@@ -678,6 +678,45 @@ app.get('/continue-watching', isloggedin, async (req, res) => {
     }
 });
 
+const streamResolutionCache = {};
+
+app.get('/api/stream/resolve', isloggedin, async (req, res) => {
+    const { provider, tmdbId, mediaType, season, episode, title, year } = req.query;
+    if (!provider || !tmdbId || !mediaType || !title) {
+        return res.status(400).json({ error: 'Missing required parameters: provider, tmdbId, mediaType, title' });
+    }
+
+    const cacheKey = `${provider}_${tmdbId}_${mediaType}_${season || 1}_${episode || 1}`;
+    if (streamResolutionCache[cacheKey]) {
+        console.log(`[Stream Resolver] Cache hit for key ${cacheKey}`);
+        return res.json(streamResolutionCache[cacheKey]);
+    }
+
+    try {
+        const { PROVIDERS } = require('./providers');
+        const targetProvider = PROVIDERS.find(p => p.providerName.toLowerCase() === provider.toLowerCase());
+        if (!targetProvider) {
+            return res.status(404).json({ error: 'Streaming provider not found' });
+        }
+
+        console.log(`[Stream Resolver] Resolving for provider ${targetProvider.providerName} (${mediaType} "${title}")...`);
+        const result = await targetProvider.resolve({
+            tmdbId,
+            mediaType,
+            season,
+            episode,
+            title,
+            year
+        });
+
+        streamResolutionCache[cacheKey] = result;
+        res.json(result);
+    } catch (err) {
+        console.error(`[Stream Resolver] Error resolving stream for ${provider}:`, err.message);
+        res.status(500).json({ error: 'Failed to resolve streaming source', details: err.message });
+    }
+});
+
 app.post('/api/watch-progress', isloggedin, async (req, res) => {
     try {
         const { tmdbId, mediaType, title, posterPath, progress, currentTime, duration, season, episode } = req.body;
@@ -733,9 +772,44 @@ app.post('/settings/update-password', isloggedin, async (req, res) => {
     }
 });
 
+let apiProcess = null;
+function startVidStreamAPI() {
+    const { spawn } = require('child_process');
+    const fs = require('fs');
+    const apiDir = path.join(__dirname, 'vidstream-api-temp');
+    if (!fs.existsSync(apiDir)) {
+        console.error('[VidStream API] Temporary directory not found!');
+        return;
+    }
+    
+    console.log('[VidStream API] Starting background service on port 4030...');
+    apiProcess = spawn('npm', ['start'], {
+        cwd: apiDir,
+        stdio: 'inherit',
+        shell: true
+    });
+    
+    apiProcess.on('error', (err) => {
+        console.error('[VidStream API] Failed to start process:', err);
+    });
+    
+    apiProcess.on('exit', (code, signal) => {
+        console.log(`[VidStream API] Background service exited with code ${code} and signal ${signal}`);
+    });
+}
+
+process.on('exit', () => {
+    if (apiProcess) apiProcess.kill();
+});
+process.on('SIGINT', () => {
+    if (apiProcess) apiProcess.kill();
+    process.exit();
+});
+
 if (!process.env.VERCEL) {
     app.listen(4444, function () {
         console.log('server has started on port 4444');
+        startVidStreamAPI();
     });
 }
 

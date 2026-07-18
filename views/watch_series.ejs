@@ -11,6 +11,7 @@
   <link rel="icon" type="image/png" href="/favicon.png">
   <link rel="apple-touch-icon" href="/favicon.png">
   <link href="/styles.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
   <style>
     .watch-layout {
       display: grid;
@@ -61,6 +62,28 @@
 </head>
 
 <body>
+<script>
+  window.streamResolutionPromises = {};
+  (function() {
+    const season = "<%= currentSeason %>";
+    const episode = "<%= currentEpisode %>";
+    const title = "<%= series.name %>";
+    const releaseDate = "<%= series.first_air_date || '' %>";
+    const year = releaseDate ? releaseDate.split("-")[0] : "";
+    const tmdbId = "<%= series.id %>";
+    const mediaType = "tv";
+    const providers = <%- JSON.stringify(providers) %>;
+    
+    console.log("[Prefetch] Instantly initiating parallel pre-resolution for all providers...");
+    providers.forEach(p => {
+      window.streamResolutionPromises[p.name] = fetch(`/api/stream/resolve?provider=${p.name}&tmdbId=${tmdbId}&mediaType=${mediaType}&season=${season}&episode=${episode}&title=${encodeURIComponent(title)}&year=${year}`)
+        .then(res => {
+          if (!res.ok) throw new Error("Resolution failed");
+          return res.json();
+        });
+    });
+  })();
+</script>
   <%- include('./navbar.ejs') %>
 
     <% const activeSeason=series.seasons.find(s=> s.season_number === currentSeason) || series.seasons.find(s =>
@@ -93,9 +116,16 @@
           <div class="watch-layout">
             <!-- Video Player Section -->
             <div class="video-container">
-              <div class="ratio ratio-16x9 border rounded overflow-hidden shadow-lg" style="border-color: rgba(255, 255, 255, 0.08) !important;">
-                <iframe id="player-iframe" src="<%= providers[0].url %>" frameborder="0" allowfullscreen
+              <div class="ratio ratio-16x9 border rounded overflow-hidden shadow-lg" style="border-color: rgba(255, 255, 255, 0.08) !important; background: #000;">
+                <iframe id="player-iframe" src="" frameborder="0" allowfullscreen
                   allow="autoplay; fullscreen" referrerpolicy="origin"></iframe>
+                <video
+                  id="player-video"
+                  class="d-none w-100 h-100"
+                  controls
+                  autoplay
+                  crossorigin="anonymous"
+                ></video>
               </div>
               <!-- Provider Selector Interface -->
               <div class="d-flex flex-wrap align-items-center gap-2 mt-4 justify-content-between p-3 rounded"
@@ -158,165 +188,361 @@
         });
 
         const providers = <%- JSON.stringify(providers) %>;
-        let currentProviderIndex = 0;
-        let lastSavedProgressTime = 0;
-        let failoverTimer = null;
-        let isPlaybackStarted = false;
+        window.lastSavedProgressTime = 0;
 
-        const iframe = document.getElementById("player-iframe");
-        const playbackStatus = document.getElementById("playback-status-toast");
-        const selectorsContainer = document.getElementById("provider-selectors");
+        class StreamingManager {
+          constructor() {
+            this.providers = providers;
+            this.currentIndex = 0;
+            this.hlsInstance = null;
+            this.videoEl = document.getElementById("player-video");
+            this.iframeEl = document.getElementById("player-iframe");
+            this.playbackStatus = document.getElementById("playback-status-toast");
+            this.selectorsContainer = document.getElementById("provider-selectors");
+            this.isPlaybackStarted = false;
+            this.failoverTimer = null;
 
-        function initProviderSelectors() {
-          selectorsContainer.innerHTML = "";
-          providers.forEach((provider, idx) => {
-            const btn = document.createElement("button");
-            btn.className = `btn btn-sm ${idx === currentProviderIndex ? 'btn-warning text-dark fw-bold' : 'btn-outline-secondary text-light'}`;
-            btn.style.borderRadius = "20px";
-            btn.style.fontSize = "0.75rem";
-            btn.style.padding = "4px 14px";
-            btn.innerHTML = `<i class="bi bi-play-fill"></i> ${provider.name}`;
-            btn.addEventListener("click", () => switchProvider(idx, true));
-            selectorsContainer.appendChild(btn);
-          });
-        }
+            this.perfMetrics = {
+              pageOpened: window.performance.timing ? window.performance.timing.navigationStart : Date.now(),
+              resolutionStarted: Date.now(),
+              resolutionCompleted: {},
+              streamUrlObtained: null,
+              playerInitialized: null,
+              firstManifestReceived: null,
+              firstSegmentReceived: null,
+              firstFrameRendered: null,
+              playbackStarted: null
+            };
 
-        function switchProvider(index, isManual = false) {
-          if (index < 0 || index >= providers.length) {
-            if (!isManual) showGlobalFailure();
-            return;
+            console.log(`[Perf Instrumentation] Page Opened: 0ms`);
           }
 
-          currentProviderIndex = index;
-          isPlaybackStarted = false;
-          initProviderSelectors();
+          logPerf(metric, detail = "") {
+            const elapsed = Date.now() - this.perfMetrics.pageOpened;
+            this.perfMetrics[metric] = Date.now();
+            console.log(`[Perf Instrumentation] ${metric} ${detail ? '(' + detail + ')' : ''}: ${elapsed}ms`);
+          }
 
-          let targetUrl = providers[index].url;
-          // Resume from last known position when switching mid-playback
-          if (lastSavedProgressTime > 10) {
-            const sep = targetUrl.includes("?") ? "&" : "?";
-            if (targetUrl.includes("vidking.net")) {
-              targetUrl += `${sep}progress=${Math.floor(lastSavedProgressTime)}`;
-            } else if (targetUrl.includes("vidlink.pro")) {
-              targetUrl += `${sep}startAt=${Math.floor(lastSavedProgressTime)}`;
-            } else {
-              targetUrl += `${sep}t=${Math.floor(lastSavedProgressTime)}`;
+          init() {
+            this.logPerf("resolutionStarted");
+            this.initProviderSelectors();
+            this.tryLoadProvider(0);
+            this.initProgressListeners();
+          }
+
+          initProviderSelectors() {
+            this.selectorsContainer.innerHTML = "";
+            this.providers.forEach((provider, idx) => {
+              const btn = document.createElement("button");
+              btn.className = `btn btn-sm ${idx === this.currentIndex ? 'btn-warning text-dark fw-bold' : 'btn-outline-secondary text-light'}`;
+              btn.style.borderRadius = "20px";
+              btn.style.fontSize = "0.75rem";
+              btn.style.padding = "4px 14px";
+              btn.innerHTML = `<i class="bi bi-play-fill"></i> ${provider.name}`;
+              btn.addEventListener("click", () => this.tryLoadProvider(idx, true));
+              this.selectorsContainer.appendChild(btn);
+            });
+          }
+
+          async tryLoadProvider(index, isManual = false) {
+            if (index < 0 || index >= this.providers.length) {
+              if (!isManual) this.showGlobalFailure();
+              return;
             }
-          }
 
-          console.log(`[StreamingManager] Switching to provider: ${providers[index].name}`);
-          iframe.src = targetUrl;
-          startFailoverTimer();
-        }
+            this.currentIndex = index;
+            this.isPlaybackStarted = false;
+            this.initProviderSelectors();
 
-        function startFailoverTimer() {
-          if (failoverTimer) clearTimeout(failoverTimer);
-          failoverTimer = setTimeout(() => {
-            if (!isPlaybackStarted) {
-              const nextIndex = currentProviderIndex + 1;
-              if (nextIndex < providers.length) {
-                playbackStatus.classList.remove("d-none");
-                playbackStatus.innerHTML = `<i class="bi bi-exclamation-triangle me-1"></i> ${providers[currentProviderIndex].name} failed. Trying ${providers[nextIndex].name}...`;
-                setTimeout(() => {
-                  playbackStatus.classList.add("d-none");
-                  switchProvider(nextIndex, false);
-                }, 1500);
+            const provider = this.providers[index];
+            
+            if (this.hlsInstance) {
+              this.hlsInstance.destroy();
+              this.hlsInstance = null;
+            }
+            this.videoEl.src = "";
+            this.videoEl.innerHTML = "";
+
+            this.playbackStatus.classList.remove("d-none");
+            this.playbackStatus.innerHTML = `<i class="bi bi-arrow-repeat me-1"></i> Loading ${provider.name}...`;
+
+            this.startFailoverTimer();
+
+            try {
+              let promise = window.streamResolutionPromises && window.streamResolutionPromises[provider.name];
+              if (!promise) {
+                const season = "<%= currentSeason %>";
+                const episode = "<%= currentEpisode %>";
+                const title = "<%= series.name %>";
+                const releaseDate = "<%= series.first_air_date || '' %>";
+                const year = releaseDate ? releaseDate.split("-")[0] : "";
+                const tmdbId = "<%= series.id %>";
+                const mediaType = "tv";
+                promise = fetch(`/api/stream/resolve?provider=${provider.name}&tmdbId=${tmdbId}&mediaType=${mediaType}&season=${season}&episode=${episode}&title=${encodeURIComponent(title)}&year=${year}`)
+                  .then(res => {
+                    if (!res.ok) throw new Error("Resolution failed");
+                    return res.json();
+                  });
+              }
+
+              const data = await promise;
+              this.logPerf("resolutionCompleted", provider.name);
+              this.playbackStatus.classList.add("d-none");
+
+              if (provider.type === "native") {
+                this.iframeEl.classList.add("d-none");
+                this.videoEl.classList.remove("d-none");
+
+                if (!data || !data.sources || data.sources.length === 0) {
+                  throw new Error("No stream sources found");
+                }
+
+                const hlsSource = data.sources.find(s => s.type === "hls" || s.src.includes(".m3u8")) || data.sources[0];
+                const streamUrl = hlsSource.src;
+                this.logPerf("streamUrlObtained", provider.name);
+
+                this.initializeHlsPlayer(streamUrl);
+                this.loadSubtitlesAsync(data.tracks);
               } else {
-                showGlobalFailure();
+                this.videoEl.classList.add("d-none");
+                this.iframeEl.classList.remove("d-none");
+
+                if (!data || !data.iframeUrl) {
+                  throw new Error("No iframe URL returned");
+                }
+
+                let iframeUrl = data.iframeUrl;
+                if (window.lastSavedProgressTime > 10) {
+                  const sep = iframeUrl.includes("?") ? "&" : "?";
+                  if (iframeUrl.includes("vidlink.pro")) {
+                    iframeUrl += `${sep}startAt=${Math.floor(window.lastSavedProgressTime)}`;
+                  } else {
+                    iframeUrl += `${sep}t=${Math.floor(window.lastSavedProgressTime)}`;
+                  }
+                }
+
+                this.iframeEl.src = iframeUrl;
+                this.logPerf("playerInitialized", provider.name);
+              }
+
+            } catch (err) {
+              console.error(`[StreamingManager] ${provider.name} failed:`, err);
+              if (this.failoverTimer) {
+                clearTimeout(this.failoverTimer);
+                this.failoverTimer = null;
+              }
+              if (!isManual) {
+                this.tryLoadProvider(index + 1);
+              } else {
+                this.playbackStatus.classList.remove("d-none");
+                this.playbackStatus.innerHTML = `<i class="bi bi-exclamation-triangle me-1"></i> ${provider.name} failed.`;
               }
             }
-          }, 15000);
+          }
+
+          initializeHlsPlayer(streamUrl) {
+            if (Hls.isSupported()) {
+              this.hlsInstance = new Hls();
+              this.hlsInstance.on(Hls.Events.MANIFEST_LOADED, () => {
+                this.logPerf("firstManifestReceived");
+              });
+              this.hlsInstance.on(Hls.Events.FRAG_LOADED, () => {
+                if (!this.perfMetrics.firstSegmentReceived) {
+                  this.logPerf("firstSegmentReceived");
+                }
+              });
+
+              this.hlsInstance.loadSource(streamUrl);
+              this.hlsInstance.attachMedia(this.videoEl);
+              this.hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
+                this.logPerf("playerInitialized");
+                if (window.lastSavedProgressTime > 10) {
+                  this.videoEl.currentTime = window.lastSavedProgressTime;
+                }
+                this.videoEl.play()
+                  .then(() => this.logPerf("playbackStarted"))
+                  .catch(e => console.log("Autoplay blocked:", e));
+              });
+            } else if (this.videoEl.canPlayType("application/vnd.apple.mpegurl")) {
+              this.videoEl.src = streamUrl;
+              this.videoEl.addEventListener("loadedmetadata", () => {
+                this.logPerf("playerInitialized");
+                if (window.lastSavedProgressTime > 10) {
+                  this.videoEl.currentTime = window.lastSavedProgressTime;
+                }
+                this.videoEl.play()
+                  .then(() => this.logPerf("playbackStarted"))
+                  .catch(e => console.log("Autoplay blocked:", e));
+              });
+            }
+
+            this.videoEl.addEventListener("playing", () => {
+              if (!this.perfMetrics.firstFrameRendered) {
+                this.logPerf("firstFrameRendered");
+              }
+            });
+          }
+
+          loadSubtitlesAsync(tracks) {
+            if (!tracks || tracks.length === 0) return;
+            setTimeout(() => {
+              tracks.forEach(track => {
+                if (track.kind === "captions" || track.kind === "subtitles") {
+                  const trackEl = document.createElement("track");
+                  trackEl.kind = "subtitles";
+                  trackEl.label = track.label;
+                  trackEl.srclang = track.label.toLowerCase().slice(0, 2);
+                  trackEl.src = track.file;
+                  if (track.default) {
+                    trackEl.default = true;
+                  }
+                  this.videoEl.appendChild(trackEl);
+                }
+              });
+              console.log(`[StreamingManager] Subtitles loaded asynchronously.`);
+            }, 0);
+          }
+
+          startFailoverTimer() {
+            if (this.failoverTimer) clearTimeout(this.failoverTimer);
+            this.failoverTimer = setTimeout(() => {
+              if (!this.isPlaybackStarted) {
+                console.log(`[StreamingManager] Provider ${this.providers[this.currentIndex].name} timed out.`);
+                this.tryLoadProvider(this.currentIndex + 1);
+              }
+            }, 15000);
+          }
+
+          initProgressListeners() {
+            this.iframeEl.addEventListener("load", () => {
+              const currentProvider = this.providers[this.currentIndex];
+              if (currentProvider && currentProvider.type !== "native") {
+                this.isPlaybackStarted = true;
+                if (this.failoverTimer) {
+                  clearTimeout(this.failoverTimer);
+                  this.failoverTimer = null;
+                }
+              }
+            });
+
+            this.videoEl.addEventListener("play", () => {
+              this.isPlaybackStarted = true;
+              if (this.failoverTimer) {
+                clearTimeout(this.failoverTimer);
+                this.failoverTimer = null;
+              }
+              this.prefetchNextEpisode();
+            });
+
+            this.videoEl.addEventListener("timeupdate", () => {
+              if (this.videoEl.currentTime > 0) {
+                window.lastSavedProgressTime = this.videoEl.currentTime;
+                const now = Date.now();
+                if (!this.videoEl.lastSavedTime || now - this.videoEl.lastSavedTime > 10000) {
+                  this.videoEl.lastSavedTime = now;
+                  this.saveProgressToServer(this.videoEl.currentTime, this.videoEl.duration);
+                }
+              }
+            });
+
+            this.videoEl.addEventListener("pause", () => {
+              this.saveProgressToServer(this.videoEl.currentTime, this.videoEl.duration);
+            });
+
+            this.videoEl.addEventListener("ended", () => {
+              this.saveProgressToServer(this.videoEl.currentTime, this.videoEl.duration);
+            });
+
+            window.addEventListener("message", (event) => {
+              try {
+                const payload = JSON.parse(event.data);
+                if (payload.type === "PLAYER_EVENT" && payload.data) {
+                  const { event: playerEvent, currentTime, duration, progress } = payload.data;
+                  if (playerEvent === 'timeupdate' || playerEvent === 'play') {
+                    this.isPlaybackStarted = true;
+                    if (this.failoverTimer) {
+                      clearTimeout(this.failoverTimer);
+                      this.failoverTimer = null;
+                    }
+                    if (currentTime) {
+                      window.lastSavedProgressTime = currentTime;
+                    }
+                  }
+                  if (playerEvent === 'timeupdate' || playerEvent === 'pause' || playerEvent === 'ended') {
+                    this.saveProgressToServer(currentTime, duration);
+                  }
+                }
+                if (payload.event === 'progress' && payload.currentTime) {
+                  this.isPlaybackStarted = true;
+                  if (this.failoverTimer) {
+                    clearTimeout(this.failoverTimer);
+                    this.failoverTimer = null;
+                  }
+                  window.lastSavedProgressTime = payload.currentTime;
+                }
+              } catch (e) {
+                // Ignore
+              }
+            });
+          }
+
+          prefetchNextEpisode() {
+            const currentEpNum = Number("<%= currentEpisode %>");
+            const totalEps = Number("<%= episodeCount %>");
+            if (currentEpNum < totalEps) {
+              const nextEpNum = currentEpNum + 1;
+              const season = "<%= currentSeason %>";
+              const title = "<%= series.name %>";
+              const releaseDate = "<%= series.first_air_date || '' %>";
+              const year = releaseDate ? releaseDate.split("-")[0] : "";
+              const tmdbId = "<%= series.id %>";
+              
+              console.log(`[Prefetch] Pre-fetching next Episode ${nextEpNum} in background...`);
+              this.providers.forEach(p => {
+                fetch(`/api/stream/resolve?provider=${p.name}&tmdbId=${tmdbId}&mediaType=tv&season=${season}&episode=${nextEpNum}&title=${encodeURIComponent(title)}&year=${year}`)
+                  .then(() => console.log(`[Prefetch] Episode ${nextEpNum} successfully cached for provider ${p.name}`))
+                  .catch(err => console.log(`[Prefetch] Failed to prefetch Episode ${nextEpNum} for provider ${p.name}:`, err));
+              });
+            }
+          }
+
+          saveProgressToServer(currentTime, duration) {
+            if (!currentTime || !duration) return;
+            const progress = (currentTime / duration) * 100;
+            fetch('/api/watch-progress', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                tmdbId: '<%= series.id %>',
+                mediaType: 'tv',
+                title: '<%= series.name %>',
+                posterPath: '<%= series.poster_path %>',
+                progress: progress,
+                currentTime: currentTime,
+                duration: duration,
+                season: '<%= currentSeason %>',
+                episode: '<%= currentEpisode %>'
+              })
+            }).catch(err => console.error("Error saving progress:", err));
+          }
+
+          showGlobalFailure() {
+            if (this.failoverTimer) clearTimeout(this.failoverTimer);
+            const ratioDiv = document.querySelector(".ratio-16x9");
+            if (ratioDiv) {
+              ratioDiv.innerHTML = `
+                <div class="d-flex flex-column align-items-center justify-content-center text-center p-5 rounded" style="background: #0A0A0A; border: 1px solid rgba(255, 255, 255, 0.08); width: 100%; height: 100%;">
+                  <i class="bi bi-exclamation-octagon fs-1 text-danger mb-3"></i>
+                  <h3 class="text-light">This title is temporarily unavailable</h3>
+                  <p class="text-muted small mb-0">Please try again later. We apologize for the inconvenience.</p>
+                </div>
+              `;
+            }
+          }
         }
 
-        function showGlobalFailure() {
-          if (failoverTimer) clearTimeout(failoverTimer);
-          const ratioDiv = document.querySelector(".ratio-16x9");
-          if (ratioDiv) {
-            ratioDiv.innerHTML = `
-          <div class="d-flex flex-column align-items-center justify-content-center text-center p-5 rounded" style="background: #0A0A0A; border: 1px solid rgba(255, 255, 255, 0.08); width: 100%; height: 100%;">
-            <i class="bi bi-exclamation-octagon fs-1 text-danger mb-3"></i>
-            <h3 class="text-light">This title is temporarily unavailable</h3>
-            <p class="text-muted small mb-0">Please try again later. We apologize for the inconvenience.</p>
-          </div>
-        `;
-          }
-        }
-
-        // ── iframe load/error detection ────────────────────────────────────
-        iframe.addEventListener("load", function () {
-          // For providers that don't send postMessage (non-VidKing),
-          // treat a successful iframe load as playback started.
-          const currentUrl = providers[currentProviderIndex].url;
-          if (!currentUrl.includes("vidking.net")) {
-            console.log(`[StreamingManager] iframe loaded for ${providers[currentProviderIndex].name}`);
-            isPlaybackStarted = true;
-            if (failoverTimer) {
-              clearTimeout(failoverTimer);
-              failoverTimer = null;
-            }
-          }
-        });
-
-        iframe.addEventListener("error", function () {
-          console.log(`[StreamingManager] iframe error for ${providers[currentProviderIndex].name}`);
-          const nextIndex = currentProviderIndex + 1;
-          if (nextIndex < providers.length) {
-            switchProvider(nextIndex, false);
-          } else {
-            showGlobalFailure();
-          }
-        });
-
-        window.addEventListener("message", function (event) {
-          try {
-            const payload = JSON.parse(event.data);
-            if (payload.type === "PLAYER_EVENT" && payload.data) {
-              const { event: playerEvent, currentTime, duration, progress, id, mediaType, season, episode } = payload.data;
-
-              if (playerEvent === 'timeupdate' || playerEvent === 'play') {
-                isPlaybackStarted = true;
-                if (failoverTimer) {
-                  clearTimeout(failoverTimer);
-                  failoverTimer = null;
-                }
-                if (currentTime) {
-                  lastSavedProgressTime = currentTime;
-                }
-              }
-
-              if (playerEvent === 'timeupdate' || playerEvent === 'pause' || playerEvent === 'ended') {
-                fetch('/api/watch-progress', {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json'
-                  },
-                  body: JSON.stringify({
-                    tmdbId: id,
-                    mediaType: mediaType,
-                    title: '<%= series.name %>',
-                    posterPath: '<%= series.poster_path %>',
-                    progress: progress,
-                    currentTime: currentTime,
-                    duration: duration,
-                    season: season,
-                    episode: episode
-                  })
-                }).catch(err => console.error('Failed to report watch progress:', err));
-              }
-            }
-          // VidLink-specific postMessage events
-          if (payload.event === 'progress' && payload.currentTime) {
-            isPlaybackStarted = true;
-            if (failoverTimer) { clearTimeout(failoverTimer); failoverTimer = null; }
-            lastSavedProgressTime = payload.currentTime;
-          }
-          } catch (e) {
-            // Ignore parsing errors
-          }
-        });
-
-        initProviderSelectors();
-        startFailoverTimer();
+        const streamingManager = new StreamingManager();
+        streamingManager.init();
       </script>
 </body>
 
