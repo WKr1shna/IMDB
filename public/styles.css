@@ -67,16 +67,11 @@ a {
   color: var(--text) !important;
 }
 
-.navbar-brand-mark {
-  display: inline-grid;
-  place-items: center;
-  width: 34px;
+.navbar-brand-logo {
   height: 34px;
-  border-radius: 8px;
-  background: linear-gradient(135deg, var(--gold), var(--red) 58%, var(--blue));
-  color: #111720;
-  font-weight: 800;
-  box-shadow: 0 10px 26px rgba(255, 95, 109, 0.28);
+  width: auto;
+  object-fit: contain;
+  display: block;
 }
 
 .nav-search {

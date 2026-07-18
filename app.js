@@ -19,6 +19,9 @@ app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
+app.get('/favicon.ico', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'favicon.png'));
+});
 
 const tmdbParams = () => ({
     api_key: process.env.TMDB_API_KEY
@@ -32,16 +35,30 @@ function shuffleMovies(movies) {
 }
 
 async function addReviewStats(items, mediaType = 'movie') {
-    for (let item of items) {
-        const reviews = await Review.find({ tmdbId: Number(item.id), mediaType: mediaType });
-        item.numReviews = reviews.length;
-        if (reviews.length > 0) {
-            const total = reviews.reduce((sum, review) => sum + review.rating, 0);
-            item.avgRating = total / reviews.length;
+    if (!items || items.length === 0) return items;
+    const ids = items.map(item => Number(item.id));
+    try {
+        const reviews = await Review.find({ tmdbId: { $in: ids }, mediaType: mediaType });
+        const reviewsMap = {};
+        reviews.forEach(review => {
+            if (!reviewsMap[review.tmdbId]) {
+                reviewsMap[review.tmdbId] = [];
+            }
+            reviewsMap[review.tmdbId].push(review);
+        });
+
+        for (let item of items) {
+            const itemReviews = reviewsMap[item.id] || [];
+            item.numReviews = itemReviews.length;
+            if (itemReviews.length > 0) {
+                const total = itemReviews.reduce((sum, review) => sum + review.rating, 0);
+                item.avgRating = total / itemReviews.length;
+            } else {
+                item.avgRating = 0;
+            }
         }
-        else {
-            item.avgRating = 0;
-        }
+    } catch (err) {
+        console.error('Error in addReviewStats:', err);
     }
     return items;
 }
@@ -439,19 +456,7 @@ app.get('/trending',async (req,res)=>{
         });
         const allMovies=response.data.results;
 
-        for(let movie of allMovies){
-            const reviews=await Review.find({
-                tmdbId:Number(movie.id)
-            });
-            movie.numReviews=reviews.length;
-            if(reviews.length>0){
-                const total=reviews.reduce((sum,review)=> sum +review.rating,0)
-                movie.avgRating=total/reviews.length;
-            }
-            else{
-                movie.avgRating=0
-            }
-        }
+        await addReviewStats(allMovies, 'movie');
         res.render('index',{
             allMovies,
             pageTitle:"Trending Movies",
