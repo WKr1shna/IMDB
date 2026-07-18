@@ -53,6 +53,12 @@
 
             <form action="/login" method="POST">
 
+              <% if(error && !error.includes('Email') && !error.includes('email') && !error.includes('Password') && !error.includes('password')) { %>
+                <div class="alert alert-danger d-flex align-items-center gap-2 py-2 px-3" role="alert" style="background: rgba(255,95,109,0.1); border-color: rgba(255,95,109,0.3); color: #ff5f6d; border-radius: 8px;">
+                  <i class="bi bi-exclamation-circle"></i>
+                  <span><%= error %></span>
+                </div>
+              <% } %>
               <div class="mb-3">
 
                 <label class="form-label">

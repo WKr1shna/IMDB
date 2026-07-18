@@ -251,9 +251,16 @@ app.post('/signup',async (req,res)=>{
     res.redirect('/login')
 }
 catch(err){
-    console.log(err);
+    console.log('Signup error:', err);
+    let errorMsg = 'Signup failed. Please try again.';
+    if (err.code === 11000) {
+        const field = Object.keys(err.keyPattern || {})[0];
+        if (field === 'email') errorMsg = 'This email is already registered. Try logging in.';
+        else if (field === 'username') errorMsg = 'This username is already taken.';
+        else errorMsg = 'Account already exists.';
+    }
     res.render('signup', {
-            error: 'Signup failed',
+            error: errorMsg,
             old: req.body
         });
 }
