@@ -8,6 +8,7 @@ const User = require('./models/user');
 const Review=require('./models/review');
 const Watchlist=require('./models/watchlist');
 const WatchProgress = require('./models/watchProgress');
+const { StreamingProviderManager } = require('./providers');
 const axios = require('axios');
 require('dotenv').config();
 const app = express();
@@ -73,11 +74,13 @@ async function getRandomRelevantMovies() {
     const moviesById = new Map();
 
     responses.forEach(response => {
-        response.data.results.forEach(movie => {
-            if (movie.poster_path && !moviesById.has(movie.id)) {
-                moviesById.set(movie.id, movie);
-            }
-        });
+        if (response.data && response.data.results) {
+            response.data.results.forEach(movie => {
+                if (movie.poster_path && !moviesById.has(movie.id)) {
+                    moviesById.set(movie.id, movie);
+                }
+            });
+        }
     });
 
     return addReviewStats(shuffleMovies([...moviesById.values()]).slice(0, 8));
@@ -141,8 +144,13 @@ app.use(session({
 app.use((req, res, next) => {
     res.locals.currentPath = req.path;
     res.locals.searchQuery = req.query.q || '';
+    res.locals.selectedGenre = '';
+    res.locals.selectedYear = '';
+    res.locals.selectedSort = '';
+    res.locals.showFilters = false;
+    res.locals.randomMovies = [];
+    res.locals.randomSeries = [];
     next();
-
 });
 app.use(async (req, res, next) => {
     res.locals.currentUser = null;
@@ -457,8 +465,9 @@ app.get('/login', (req, res) => {
 app.get('/watch/:id',isloggedin,async (req,res)=>{
     try{
         const response=await axios.get(`https://api.themoviedb.org/3/movie/${req.params.id}`,{params:{api_key:process.env.TMDB_API_KEY}})
-        const movie=response.data
-        res.render('watch',{movie});
+        const movie=response.data;
+        const providers = StreamingProviderManager.getProviders(movie.id, 'movie');
+        res.render('watch',{movie, providers});
     }
     catch(err){
         console.log(err)
@@ -616,11 +625,13 @@ app.get('/watch-series/:id', isloggedin, async (req, res) => {
         const series = response.data;
         const currentSeason = Number(req.query.season) || 1;
         const currentEpisode = Number(req.query.episode) || 1;
+        const providers = StreamingProviderManager.getProviders(series.id, 'tv', currentSeason, currentEpisode);
         
         res.render('watch_series', {
             series,
             currentSeason,
-            currentEpisode
+            currentEpisode,
+            providers
         });
     } catch (err) {
         console.log(err);

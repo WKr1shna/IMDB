@@ -32,32 +32,167 @@
       <%= movie.title %>
     </h1>
 
-    <div class="ratio ratio-16x9">
+    <div class="ratio ratio-16x9 border border-secondary rounded overflow-hidden shadow-lg">
       <iframe
-        src="https://www.vidking.net/embed/movie/<%= movie.id %>?color=ffd166&autoPlay=true"
+        id="player-iframe"
+        src="<%= providers[0].url %>"
         frameborder="0"
         allowfullscreen
-        allow="fullscreen"
+        allow="autoplay; fullscreen"
         referrerpolicy="origin"
       ></iframe>
     </div>
 
-  </div>
+    <!-- Provider Selector Interface -->
+    <div class="d-flex flex-wrap align-items-center gap-2 mt-4 justify-content-between p-3 rounded" style="background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.05);">
+      <div class="d-flex align-items-center gap-2">
+        <span class="text-muted small fw-bold text-uppercase" style="font-size: 0.75rem; letter-spacing: 1px;"><i class="bi bi-server me-1"></i> Streaming Server:</span>
+        <div class="d-flex flex-wrap gap-2" id="provider-selectors"></div>
+      </div>
+      <div id="playback-status-toast" class="text-warning small d-none">
+        <i class="bi bi-arrow-repeat me-1"></i> Auto-switching server...
+      </div>
+    </div>
 
+  </div>
 </main>
 
 <script>
+  const providers = <%- JSON.stringify(providers) %>;
+  let currentProviderIndex = 0;
+  let lastSavedProgressTime = 0;
+  let failoverTimer = null;
+  let isPlaybackStarted = false;
+
+  const iframe = document.getElementById("player-iframe");
+  const playbackStatus = document.getElementById("playback-status-toast");
+  const selectorsContainer = document.getElementById("provider-selectors");
+
+  // ── Provider Selector Buttons ──────────────────────────────────────
+  function initProviderSelectors() {
+    selectorsContainer.innerHTML = "";
+    providers.forEach((provider, idx) => {
+      const btn = document.createElement("button");
+      btn.className = `btn btn-sm ${idx === currentProviderIndex ? 'btn-warning text-dark fw-bold' : 'btn-outline-secondary text-light'}`;
+      btn.style.borderRadius = "20px";
+      btn.style.fontSize = "0.75rem";
+      btn.style.padding = "4px 14px";
+      btn.innerHTML = `<i class="bi bi-play-fill"></i> ${provider.name}`;
+      btn.addEventListener("click", () => switchProvider(idx, true));
+      selectorsContainer.appendChild(btn);
+    });
+  }
+
+  // ── Switch Provider ────────────────────────────────────────────────
+  function switchProvider(index, isManual = false) {
+    if (index < 0 || index >= providers.length) {
+      if (!isManual) showGlobalFailure();
+      return;
+    }
+
+    currentProviderIndex = index;
+    isPlaybackStarted = false;
+    initProviderSelectors();
+
+    let targetUrl = providers[index].url;
+    // Resume from last known position when switching mid-playback
+    if (lastSavedProgressTime > 10) {
+      const sep = targetUrl.includes("?") ? "&" : "?";
+      if (targetUrl.includes("vidking.net")) {
+        targetUrl += `${sep}progress=${Math.floor(lastSavedProgressTime)}`;
+      } else if (targetUrl.includes("vidlink.pro")) {
+        targetUrl += `${sep}startAt=${Math.floor(lastSavedProgressTime)}`;
+      } else {
+        targetUrl += `${sep}t=${Math.floor(lastSavedProgressTime)}`;
+      }
+    }
+
+    console.log(`[StreamingManager] Switching to: ${providers[index].name} → ${targetUrl}`);
+    iframe.src = targetUrl;
+    startFailoverTimer();
+  }
+
+  // ── Automatic Failover Timer ───────────────────────────────────────
+  function startFailoverTimer() {
+    if (failoverTimer) clearTimeout(failoverTimer);
+    failoverTimer = setTimeout(() => {
+      if (!isPlaybackStarted) {
+        const nextIndex = currentProviderIndex + 1;
+        if (nextIndex < providers.length) {
+          console.log(`[StreamingManager] ${providers[currentProviderIndex].name} timed out → trying ${providers[nextIndex].name}`);
+          playbackStatus.classList.remove("d-none");
+          playbackStatus.innerHTML = `<i class="bi bi-exclamation-triangle me-1"></i> ${providers[currentProviderIndex].name} failed. Trying ${providers[nextIndex].name}...`;
+          setTimeout(() => {
+            playbackStatus.classList.add("d-none");
+            switchProvider(nextIndex, false);
+          }, 1500);
+        } else {
+          console.log('[StreamingManager] All providers exhausted');
+          showGlobalFailure();
+        }
+      }
+    }, 15000);
+  }
+
+  // ── iframe load/error detection ────────────────────────────────────
+  iframe.addEventListener("load", function () {
+    // For providers that don't send postMessage (non-VidKing),
+    // treat a successful iframe load as playback started.
+    const currentUrl = providers[currentProviderIndex].url;
+    if (!currentUrl.includes("vidking.net")) {
+      console.log(`[StreamingManager] iframe loaded for ${providers[currentProviderIndex].name}`);
+      isPlaybackStarted = true;
+      if (failoverTimer) {
+        clearTimeout(failoverTimer);
+        failoverTimer = null;
+      }
+    }
+  });
+
+  iframe.addEventListener("error", function () {
+    console.log(`[StreamingManager] iframe error for ${providers[currentProviderIndex].name}`);
+    const nextIndex = currentProviderIndex + 1;
+    if (nextIndex < providers.length) {
+      switchProvider(nextIndex, false);
+    } else {
+      showGlobalFailure();
+    }
+  });
+
+  // ── Global Failure State ───────────────────────────────────────────
+  function showGlobalFailure() {
+    if (failoverTimer) clearTimeout(failoverTimer);
+    const ratioDiv = document.querySelector(".ratio-16x9");
+    if (ratioDiv) {
+      ratioDiv.innerHTML = `
+        <div class="d-flex flex-column align-items-center justify-content-center text-center p-5 rounded" style="background: rgba(255, 95, 109, 0.08); border: 1px solid rgba(255, 95, 109, 0.2); width: 100%; height: 100%;">
+          <i class="bi bi-exclamation-octagon fs-1 text-danger mb-3"></i>
+          <h3 class="text-light">This title is temporarily unavailable</h3>
+          <p class="text-muted small mb-0">Please try again later. We apologize for the inconvenience.</p>
+        </div>
+      `;
+    }
+  }
+
+  // ── VidKing & VidLink postMessage listener (watch progress) ────────
   window.addEventListener("message", function (event) {
-    if (event.origin !== 'https://www.vidking.net') return;
-    
     try {
       const payload = JSON.parse(event.data);
       if (payload.type === "PLAYER_EVENT" && payload.data) {
         const { event: playerEvent, currentTime, duration, progress, id, mediaType } = payload.data;
-        
+
+        if (playerEvent === 'timeupdate' || playerEvent === 'play') {
+          isPlaybackStarted = true;
+          if (failoverTimer) {
+            clearTimeout(failoverTimer);
+            failoverTimer = null;
+          }
+          if (currentTime) {
+            lastSavedProgressTime = currentTime;
+          }
+        }
+
         if (playerEvent === 'timeupdate' || playerEvent === 'pause' || playerEvent === 'ended') {
-          // Throttle network requests slightly by only saving if we are close to integer progress values or on pause/ended
-          // Or send it regularly since it runs in the background. Sending it is simple and safe:
           fetch('/api/watch-progress', {
             method: 'POST',
             headers: {
@@ -75,10 +210,21 @@
           }).catch(err => console.error('Failed to report watch progress:', err));
         }
       }
+
+      // VidLink-specific postMessage events
+      if (payload.event === 'progress' && payload.currentTime) {
+        isPlaybackStarted = true;
+        if (failoverTimer) { clearTimeout(failoverTimer); failoverTimer = null; }
+        lastSavedProgressTime = payload.currentTime;
+      }
     } catch (e) {
-      // Ignore parsing errors for non-JSON postmessages
+      // Ignore non-JSON postmessages
     }
   });
+
+  // ── Bootstrap ──────────────────────────────────────────────────────
+  initProviderSelectors();
+  startFailoverTimer();
 </script>
 
 </body>
