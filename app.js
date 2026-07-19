@@ -260,8 +260,20 @@ app.post('/signup',async (req,res)=>{
     try{
     const hpass= await bcrypt.hash(req.body.password,10);
 
+    let sanitizedDisplayName = null;
+    if (req.body.displayName && typeof req.body.displayName === 'string') {
+        sanitizedDisplayName = req.body.displayName.trim().replace(/\s+/g, ' ');
+        if (sanitizedDisplayName.length > 50) {
+            sanitizedDisplayName = sanitizedDisplayName.substring(0, 50);
+        }
+        if (sanitizedDisplayName.length === 0) {
+            sanitizedDisplayName = null;
+        }
+    }
+
     await User.create({
         username:req.body.username,
+        displayName:sanitizedDisplayName,
         email:req.body.email,
         password:hpass
     })
@@ -294,12 +306,17 @@ app.post('/login',async(req,res)=>{
 
     }
     try{
-    const user=await User.findOne({
-        email:req.body.email
-    })
+    const loginInput = req.body.email ? req.body.email.trim() : '';
+    const user = await User.findOne({
+        $or: [
+            { email: loginInput.toLowerCase() },
+            { email: loginInput },
+            { username: loginInput }
+        ]
+    });
     if(!user){
         return res.render('login',{
-    error:'Invalid Email',
+    error:'Invalid Email or Username',
     old:req.body})
     }
     const valid=await bcrypt.compare(req.body.password,user.password);
@@ -750,6 +767,31 @@ app.post('/api/watch-progress', isloggedin, async (req, res) => {
 
 app.get('/settings', isloggedin, (req, res) => {
     res.render('settings', { error: null, success: null });
+});
+
+app.post('/settings/update-display-name', isloggedin, async (req, res) => {
+    try {
+        let { displayName } = req.body;
+        let sanitized = null;
+        if (typeof displayName === 'string') {
+            sanitized = displayName.trim().replace(/\s+/g, ' ');
+            if (sanitized.length > 50) {
+                return res.render('settings', { error: 'Display Name cannot exceed 50 characters', success: null });
+            }
+            if (sanitized.length === 0) {
+                sanitized = null;
+            }
+        }
+
+        const user = await User.findById(req.session.userId);
+        user.displayName = sanitized;
+        await user.save();
+
+        res.render('settings', { error: null, success: sanitized ? 'Display Name updated successfully!' : 'Display Name cleared. Defaulting to Username.' });
+    } catch (err) {
+        console.error('Failed to update Display Name:', err);
+        res.render('settings', { error: 'Failed to update Display Name', success: null });
+    }
 });
 
 app.post('/settings/update-password', isloggedin, async (req, res) => {

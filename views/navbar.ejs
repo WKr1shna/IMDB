@@ -52,14 +52,14 @@
         <% if (typeof currentUser !== 'undefined' && currentUser) { %>
           <div class="dropdown me-lg-2">
             <button class="btn btn-link text-light p-0 border-0 d-flex align-items-center gap-2 dropdown-toggle-custom" type="button" id="profileDropdown" data-bs-toggle="dropdown" aria-expanded="false">
-              <div class="avatar-circle d-flex align-items-center justify-content-center fw-bold rounded-circle" style="width: 38px; height: 38px; font-size: 1.1rem; border: 1px solid rgba(255,255,255,0.25); background: #ffffff; color: #000000;">
-                <%= currentUser.username.charAt(0).toUpperCase() %>
+              <div class="avatar-circle d-flex align-items-center justify-content-center fw-bold rounded-circle" style="width: 38px; height: 38px; font-size: 1.1rem; border: 1px solid rgba(205, 175, 247, 0.25); background: rgba(205, 175, 247, 1); color: #000000;">
+                <%= (currentUser.displayName || currentUser.username).charAt(0).toUpperCase() %>
               </div>
             </button>
-            <ul class="dropdown-menu dropdown-menu-end profile-dropdown-menu p-3" aria-labelledby="profileDropdown" style="min-width: 280px; background: #0A0A0A; border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; color: #fff; box-shadow: 0 10px 30px rgba(0,0,0,0.8);">
+            <ul class="dropdown-menu dropdown-menu-end profile-dropdown-menu p-3" aria-labelledby="profileDropdown" style="min-width: 280px; background: #0A0A0A; border: 1px solid rgba(205, 175, 247, 0.08); border-radius: 12px; color: rgba(205, 175, 247, 1); box-shadow: 0 10px 30px rgba(0,0,0,0.8);">
               <li class="px-2 pb-3 mb-2 border-bottom" style="border-color: rgba(255,255,255,0.08) !important;">
-                <div class="fw-bold text-white fs-5"><%= currentUser.username %></div>
-                <div class="text-light-50 small text-truncate" style="opacity: 0.7;"><%= currentUser.email %></div>
+                <div class="fw-bold text-white fs-5"><%= currentUser.displayName || currentUser.username %></div>
+                <div class="text-light-50 small text-truncate" style="opacity: 0.7;"><%= currentUser.displayName ? '@' + currentUser.username + ' • ' + currentUser.email : currentUser.email %></div>
               </li>
               <li>
                 <a class="dropdown-item d-flex align-items-center gap-3 py-2 px-3 rounded-2 text-light" href="/profile">

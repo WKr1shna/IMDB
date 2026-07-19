@@ -54,7 +54,7 @@
 
             <form action="/login" method="POST">
 
-              <% if(error && !error.includes('Email') && !error.includes('email') && !error.includes('Password') && !error.includes('password')) { %>
+              <% if(error && !error.includes('Email') && !error.includes('email') && !error.includes('Username') && !error.includes('username') && !error.includes('Password') && !error.includes('password')) { %>
                 <div class="alert alert-danger d-flex align-items-center gap-2 py-2 px-3" role="alert" style="background: rgba(255,59,48,0.1); border-color: rgba(255,59,48,0.2); color: #FF3B30; border-radius: 8px;">
                   <i class="bi bi-exclamation-circle"></i>
                   <span><%= error %></span>
@@ -63,16 +63,18 @@
               <div class="mb-3">
 
                 <label class="form-label">
-                  Email
+                  Email or Username
                 </label>
 
                 <input
-                  type="email"
+                  type="text"
                   class="form-control"
                   name="email"
+                  placeholder="Enter email or username"
+                  value="<%= (typeof old !== 'undefined' && old) ? old.email : '' %>"
                   required
                 >
-                <% if(error && error.includes('Email')){ %>
+                <% if(error && (error.includes('Email') || error.includes('email') || error.includes('Username') || error.includes('username'))){ %>
                   <div class="text-danger mt-1">
                     <%= error %>
                   </div>

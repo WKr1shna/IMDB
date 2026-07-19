@@ -33,6 +33,29 @@
               <div class="alert alert-success mb-4"><%= success %></div>
             <% } %>
 
+            <form action="/settings/update-display-name" method="POST" class="mt-4 mb-5 pb-4 border-bottom" style="border-color: rgba(255, 255, 255, 0.08) !important;">
+              <h5 class="text-light mb-3">Display Name</h5>
+              
+              <div class="mb-3">
+                <label class="form-label text-muted">Display Name</label>
+                <input 
+                  type="text" 
+                  name="displayName" 
+                  class="form-control bg-dark text-light border-secondary" 
+                  placeholder="<%= currentUser ? currentUser.username : 'Your Display Name' %>" 
+                  value="<%= (currentUser && currentUser.displayName) ? currentUser.displayName : '' %>"
+                  maxlength="50"
+                >
+                <div class="form-text text-muted small mt-2">
+                  Shown publicly across Wysteria. If cleared or left blank, your username (<code>@<%= currentUser ? currentUser.username : '' %></code>) will be displayed instead.
+                </div>
+              </div>
+
+              <button class="btn btn-warning w-100 mt-2">
+                <i class="bi bi-person-badge me-1"></i> Save Display Name
+              </button>
+            </form>
+
             <form action="/settings/update-password" method="POST" class="mt-4">
               <h5 class="text-light mb-3">Change Password</h5>
               
