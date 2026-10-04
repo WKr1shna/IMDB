@@ -283,23 +283,14 @@
           </div>
         </div>
 
-        <!-- Active Filter Chips -->
-        <% if (activeFilterCount > 0 || searchQuery) { %>
+        <!-- Active Filter Chips (Genre, Year, Sort) -->
+        <% if (activeFilterCount > 0) { %>
           <div class="active-filter-chips">
             <span class="text-muted small me-1"><i class="bi bi-funnel-fill text-warning me-1"></i>Active:</span>
 
-            <% if (searchQuery) { %>
-              <span class="filter-chip">
-                <span>Search: "<%= searchQuery %>"</span>
-                <button type="button" class="filter-chip-remove" onclick="removeFilter('q')" aria-label="Remove search filter">
-                  <i class="bi bi-x"></i>
-                </button>
-              </span>
-            <% } %>
-
             <% if (selectedGenre && activeGenreLabel) { %>
               <span class="filter-chip">
-                <span>Genre: <%= activeGenreLabel %></span>
+                <span><%= activeGenreLabel %></span>
                 <button type="button" class="filter-chip-remove" onclick="removeFilter('genre')" aria-label="Remove genre filter">
                   <i class="bi bi-x"></i>
                 </button>
@@ -308,7 +299,7 @@
 
             <% if (selectedYear) { %>
               <span class="filter-chip">
-                <span>Year: <%= selectedYear %></span>
+                <span><%= selectedYear %></span>
                 <button type="button" class="filter-chip-remove" onclick="removeFilter('year')" aria-label="Remove year filter">
                   <i class="bi bi-x"></i>
                 </button>
@@ -317,7 +308,7 @@
 
             <% if (selectedSort && selectedSort !== 'popularity.desc') { %>
               <span class="filter-chip">
-                <span>Sort: <%= activeSortLabel %></span>
+                <span><%= activeSortLabel %></span>
                 <button type="button" class="filter-chip-remove" onclick="removeFilter('sort')" aria-label="Remove sort filter">
                   <i class="bi bi-x"></i>
                 </button>
