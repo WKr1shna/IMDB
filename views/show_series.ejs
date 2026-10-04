@@ -3,13 +3,17 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title><%= series.name %> | Wysteria</title>
+  <title><%= series.name %> (<%= series.first_air_date ? series.first_air_date.split('-')[0] : 'N/A' %>) | Wysteria</title>
+  
   <link rel="preconnect" href="https://cdn.jsdelivr.net">
+  <link rel="preconnect" href="https://image.tmdb.org">
+
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
   <link rel="icon" type="image/png" href="/favicon.png">
   <link rel="apple-touch-icon" href="/favicon.png">
   <link href="/styles.css" rel="stylesheet">
+  
   <style>
     .rating-stars {
       display: flex;
@@ -71,116 +75,418 @@
   <%- include('./navbar.ejs') %>
 
   <%
+    // Helper formatters
+    const formatDate = (dateStr) => {
+      if (!dateStr) return 'N/A';
+      const parts = dateStr.split('-');
+      if (parts.length !== 3) return dateStr;
+      const d = new Date(dateStr);
+      return isNaN(d.getTime()) ? dateStr : d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+    };
+
+    const formatRuntime = (mins) => {
+      if (!mins || mins <= 0) return null;
+      const h = Math.floor(mins / 60);
+      const m = mins % 60;
+      return h > 0 ? `${h}h ${m}m (${mins} min)` : `${mins} min`;
+    };
+
+    // User reviews calculations
     const currentUserRating = userReview ? Number(userReview.rating) : 0;
     const avgRating = reviews.length > 0
       ? reviews.reduce((sum, review) => sum + Number(review.rating || 0), 0) / reviews.length
       : 0;
+
+    // Content Certification (Age Rating for TV)
+    let certification = null;
+    if (series.content_ratings && series.content_ratings.results && Array.isArray(series.content_ratings.results)) {
+      const usRating = series.content_ratings.results.find(r => r.iso_3166_1 === 'US');
+      if (usRating && usRating.rating && usRating.rating.trim()) {
+        certification = usRating.rating.trim();
+      }
+      if (!certification) {
+        for (const item of series.content_ratings.results) {
+          if (item.rating && item.rating.trim()) {
+            certification = item.rating.trim();
+            break;
+          }
+        }
+      }
+    }
+
+    // Original Language display name
+    let languageName = series.original_language ? series.original_language.toUpperCase() : 'N/A';
+    if (series.spoken_languages && Array.isArray(series.spoken_languages)) {
+      const langObj = series.spoken_languages.find(l => l.iso_639_1 === series.original_language);
+      if (langObj) {
+        languageName = langObj.english_name || langObj.name || languageName;
+      } else if (series.spoken_languages.length > 0) {
+        languageName = series.spoken_languages[0].english_name || series.spoken_languages[0].name || languageName;
+      }
+    }
+
+    // Episode runtime extraction
+    let epRuntime = null;
+    if (series.episode_run_time && Array.isArray(series.episode_run_time) && series.episode_run_time.length > 0) {
+      epRuntime = formatRuntime(series.episode_run_time[0]);
+    }
+
+    // Cast members
+    const allCast = (series.credits && series.credits.cast && Array.isArray(series.credits.cast)) ? series.credits.cast : [];
+    const initialCastLimit = 14;
+    const initialCast = allCast.slice(0, initialCastLimit);
+    const extraCast = allCast.slice(initialCastLimit);
+
+    // Crew & Creators categorization
+    const creators = (series.created_by && Array.isArray(series.created_by)) ? series.created_by.map(c => c.name) : [];
+    const allCrew = (series.credits && series.credits.crew && Array.isArray(series.credits.crew)) ? series.credits.crew : [];
+    const directors = [...new Set(allCrew.filter(c => c.job === 'Director').map(c => c.name))];
+    const writers = [...new Set(allCrew.filter(c => ['Screenplay', 'Writer', 'Story', 'Staff Writer', 'Co-Executive Producer', 'Executive Producer'].includes(c.job)).map(c => c.name))];
+    const producers = [...new Set(allCrew.filter(c => ['Producer', 'Executive Producer', 'Associate Producer'].includes(c.job)).map(c => c.name))];
+    const composers = [...new Set(allCrew.filter(c => ['Original Music Composer', 'Music', 'Composer', 'Music Supervisor'].includes(c.job)).map(c => c.name))];
+    const cinematographers = [...new Set(allCrew.filter(c => ['Director of Photography', 'Cinematography'].includes(c.job)).map(c => c.name))];
+
+    // Trailer extraction
+    let trailerVideo = null;
+    if (series.videos && series.videos.results && Array.isArray(series.videos.results)) {
+      trailerVideo = series.videos.results.find(v => v.site === 'YouTube' && v.type === 'Trailer' && v.official)
+        || series.videos.results.find(v => v.site === 'YouTube' && v.type === 'Trailer')
+        || series.videos.results.find(v => v.site === 'YouTube' && v.type === 'Teaser')
+        || series.videos.results.find(v => v.site === 'YouTube');
+    }
+
+    // Similar & Recommended Series (deduplicated)
+    const recsList = (series.recommendations && series.recommendations.results && Array.isArray(series.recommendations.results)) ? series.recommendations.results : [];
+    const simList = (series.similar && series.similar.results && Array.isArray(series.similar.results)) ? series.similar.results : [];
+    
+    const seenIds = new Set([series.id]);
+    const combinedSimilar = [];
+    for (const s of [...recsList, ...simList]) {
+      if (s && s.id && !seenIds.has(s.id) && s.poster_path) {
+        seenIds.add(s.id);
+        combinedSimilar.push(s);
+        if (combinedSimilar.length >= 12) break;
+      }
+    }
   %>
 
   <main class="page-shell">
     <div class="container">
-      <div class="detail-layout">
-        <aside class="detail-poster-panel">
-          <div class="poster-frame">
-            <% if (series.poster_path) { %>
-              <img
-                src="https://image.tmdb.org/t/p/w500<%= series.poster_path %>"
-                class="detail-poster"
-                alt="<%= series.name %> poster"
-                fetchpriority="high"
-                decoding="async"
-              >
-            <% } else { %>
-              <div class="poster-placeholder">
-                <i class="bi bi-tv"></i>
-              </div>
-            <% } %>
-          </div>
-        </aside>
-
-        <section>
-          <div class="detail-content">
-            <div class="eyebrow">TV Series Details</div>
-            <h1 class="page-title"><%= series.name %></h1>
-            <p class="page-subtitle mb-4">
-              <%= series.overview || 'No overview available.' %>
-            </p>
-
-            <div class="d-flex flex-wrap gap-2 mb-4">
-              <span class="rating-pill">
-                <i class="bi bi-star-fill"></i>
-                <%= avgRating.toFixed(1) %>
-              </span>
-              <span class="btn btn-outline-light disabled">
-                <i class="bi bi-calendar3 me-1"></i>
-                <%= series.first_air_date ? series.first_air_date.split('-')[0] : 'N/A' %>
-              </span>
-              <span class="btn btn-outline-light disabled">
-                <i class="bi bi-chat-left-text me-1"></i>
-                <%= reviews.length %>
-              </span>
-              <% if (series.number_of_seasons) { %>
-                <span class="btn btn-outline-light disabled">
-                  <i class="bi bi-layer-backward me-1"></i>
-                  <%= series.number_of_seasons %> Seasons
-                </span>
-              <% } %>
-            </div>
-
-            <div class="d-flex flex-wrap align-items-center gap-2">
-              <a href="/watch-series/<%= series.id %>" class="btn btn-watch">
-                <i class="bi bi-play-circle me-1"></i>
-                Watch Series
-              </a>
-
-              <% if (watchlistMovie) { %>
-                <form action="/watchlist/add" method="POST" class="m-0">
-                  <input type="hidden" name="tmdbId" value="<%= series.id %>">
-                  <input type="hidden" name="title" value="<%= series.name %>">
-                  <input type="hidden" name="posterPath" value="<%= series.poster_path || '' %>">
-                  <input type="hidden" name="mediaType" value="tv">
-                  <label for="watchStatus" class="visually-hidden">Watchlist status</label>
-                  <select
-                    id="watchStatus"
-                    name="status"
-                    class="form-select"
-                    onchange="this.form.submit()"
-                    aria-label="Change watchlist status"
+      
+      <!-- HERO & BACKDROP BANNER -->
+      <section class="movie-backdrop-hero" <% if (series.backdrop_path) { %>style="background-image: url('https://image.tmdb.org/t/p/w1280<%= series.backdrop_path %>');"<% } %>>
+        <div class="movie-hero-content">
+          <div class="detail-layout">
+            
+            <!-- Poster Aside -->
+            <aside class="detail-poster-panel">
+              <div class="poster-frame">
+                <% if (series.poster_path) { %>
+                  <img
+                    src="https://image.tmdb.org/t/p/w500<%= series.poster_path %>"
+                    class="detail-poster"
+                    alt="<%= series.name %> poster"
+                    fetchpriority="high"
+                    decoding="async"
                   >
-                    <% ['Plan to Watch', 'Watching', 'Completed', 'On hold', 'Dropped'].forEach((statusOption) => { %>
-                      <option value="<%= statusOption %>" <%= watchlistMovie.status === statusOption ? 'selected' : '' %>>
-                        <%= statusOption %>
-                      </option>
-                    <% }) %>
-                  </select>
-                </form>
-              <% } else { %>
-                <form action="/watchlist/add" method="POST" class="m-0">
-                  <input type="hidden" name="tmdbId" value="<%= series.id %>">
-                  <input type="hidden" name="title" value="<%= series.name %>">
-                  <input type="hidden" name="posterPath" value="<%= series.poster_path || '' %>">
-                  <input type="hidden" name="status" value="Plan to Watch">
-                  <input type="hidden" name="mediaType" value="tv">
-                  <button class="btn btn-warning">
-                    <i class="bi bi-bookmark-plus me-1"></i>
-                    Add to Watchlist
-                  </button>
-                </form>
+                <% } else { %>
+                  <div class="poster-placeholder">
+                    <i class="bi bi-tv"></i>
+                  </div>
+                <% } %>
+              </div>
+            </aside>
+
+            <!-- Main Hero Details -->
+            <div class="detail-content p-0">
+              <div class="eyebrow mb-2">TV Series Overview</div>
+              
+              <h1 class="page-title mb-2">
+                <%= series.name %>
+                <% if (series.first_air_date) { %>
+                  <span class="text-muted fw-normal fs-4">(<%= series.first_air_date.split('-')[0] %>)</span>
+                <% } %>
+              </h1>
+
+              <% if (series.original_name && series.original_name.toLowerCase() !== series.name.toLowerCase()) { %>
+                <div class="text-muted small mb-2 fst-italic">
+                  Original Title: <span class="text-light"><%= series.original_name %></span>
+                </div>
               <% } %>
 
-              <a href="/series" class="btn btn-outline-light">
-                <i class="bi bi-arrow-left me-1"></i>
-                Back
-              </a>
+              <% if (series.tagline) { %>
+                <div class="movie-tagline">"<%= series.tagline %>"</div>
+              <% } %>
+
+              <!-- Badges & Ratings Strip -->
+              <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+                <% if (certification) { %>
+                  <span class="movie-cert-badge"><%= certification %></span>
+                <% } %>
+                
+                <% if (series.vote_average) { %>
+                  <span class="movie-meta-badge" title="TMDB Rating">
+                    <i class="bi bi-star-fill text-warning"></i>
+                    <%= series.vote_average.toFixed(1) %>/10
+                    <% if (series.vote_count) { %>
+                      <span class="text-muted small">(<%= Number(series.vote_count).toLocaleString() %>)</span>
+                    <% } %>
+                  </span>
+                <% } %>
+
+                <span class="movie-meta-badge" title="Wysteria Community Rating">
+                  <i class="bi bi-heart-fill text-danger"></i>
+                  <%= avgRating > 0 ? avgRating.toFixed(1) + '/5' : 'No ratings' %>
+                  <span class="text-muted small">(<%= reviews.length %> reviews)</span>
+                </span>
+
+                <% if (series.number_of_seasons) { %>
+                  <span class="movie-meta-badge">
+                    <i class="bi bi-layer-backward me-1 text-muted"></i>
+                    <%= series.number_of_seasons %> <%= series.number_of_seasons === 1 ? 'Season' : 'Seasons' %>
+                    <% if (series.number_of_episodes) { %>
+                      <span class="text-muted small">(<%= series.number_of_episodes %> eps)</span>
+                    <% } %>
+                  </span>
+                <% } %>
+
+                <% if (series.status) { %>
+                  <span class="movie-meta-badge">
+                    <i class="bi bi-info-circle me-1 text-muted"></i>
+                    <%= series.status %>
+                  </span>
+                <% } %>
+              </div>
+
+              <!-- Genres -->
+              <% if (series.genres && series.genres.length > 0) { %>
+                <div class="d-flex flex-wrap gap-2 mb-4">
+                  <% series.genres.forEach(genre => { %>
+                    <span class="genre-pill"><%= genre.name %></span>
+                  <% }) %>
+                </div>
+              <% } %>
+
+              <!-- Overview Text -->
+              <p class="page-subtitle mb-4 text-light" style="line-height: 1.6; font-size: 1.02rem;">
+                <%= series.overview || 'No synopsis available for this title.' %>
+              </p>
+
+              <!-- Action Buttons -->
+              <div class="d-flex flex-wrap align-items-center gap-3">
+                <a href="/watch-series/<%= series.id %>" class="btn btn-watch px-4 py-2">
+                  <i class="bi bi-play-circle-fill me-2 fs-5 align-middle"></i>
+                  Watch Series
+                </a>
+
+                <% if (watchlistMovie) { %>
+                  <form action="/watchlist/add" method="POST" class="m-0">
+                    <input type="hidden" name="tmdbId" value="<%= series.id %>">
+                    <input type="hidden" name="title" value="<%= series.name %>">
+                    <input type="hidden" name="posterPath" value="<%= series.poster_path || '' %>">
+                    <input type="hidden" name="mediaType" value="tv">
+                    <label for="watchStatus" class="visually-hidden">Watchlist status</label>
+                    <select
+                      id="watchStatus"
+                      name="status"
+                      class="form-select"
+                      onchange="this.form.submit()"
+                      aria-label="Change watchlist status"
+                      style="min-width: 170px;"
+                    >
+                      <% ['Plan to Watch', 'Watching', 'Completed', 'On hold', 'Dropped'].forEach((statusOption) => { %>
+                        <option value="<%= statusOption %>" <%= watchlistMovie.status === statusOption ? 'selected' : '' %>>
+                          <%= statusOption %>
+                        </option>
+                      <% }) %>
+                    </select>
+                  </form>
+                <% } else { %>
+                  <form action="/watchlist/add" method="POST" class="m-0">
+                    <input type="hidden" name="tmdbId" value="<%= series.id %>">
+                    <input type="hidden" name="title" value="<%= series.name %>">
+                    <input type="hidden" name="posterPath" value="<%= series.poster_path || '' %>">
+                    <input type="hidden" name="status" value="Plan to Watch">
+                    <input type="hidden" name="mediaType" value="tv">
+                    <button class="btn btn-warning px-3">
+                      <i class="bi bi-bookmark-plus me-1"></i>
+                      Add to Watchlist
+                    </button>
+                  </form>
+                <% } %>
+
+                <a href="/series" class="btn btn-outline-light px-3">
+                  <i class="bi bi-arrow-left me-1"></i>
+                  Back
+                </a>
+              </div>
+
             </div>
           </div>
+        </div>
+      </section>
 
-          <section class="review-panel">
+      <div class="row g-4">
+        <!-- LEFT / MAIN COLUMN -->
+        <div class="col-lg-8">
+          
+          <!-- CAST SECTION -->
+          <% if (allCast.length > 0) { %>
+            <section class="detail-section-card mt-0">
+              <div class="d-flex justify-content-between align-items-center mb-3">
+                <div>
+                  <div class="eyebrow">Top Billed Cast</div>
+                  <h2 class="h4 mb-0 text-light">Series Cast</h2>
+                </div>
+                <span class="badge bg-dark border border-secondary text-muted"><%= allCast.length %> Total</span>
+              </div>
+
+              <div class="cast-grid">
+                <% initialCast.forEach(actor => { %>
+                  <div class="cast-card">
+                    <div class="cast-img-wrapper">
+                      <% if (actor.profile_path) { %>
+                        <img
+                          src="https://image.tmdb.org/t/p/w185<%= actor.profile_path %>"
+                          alt="<%= actor.name %>"
+                          class="cast-img"
+                          loading="lazy"
+                          decoding="async"
+                        >
+                      <% } else { %>
+                        <div class="d-flex align-items-center justify-content-center h-100 text-muted">
+                          <i class="bi bi-person-fill fs-1 opacity-25"></i>
+                        </div>
+                      <% } %>
+                    </div>
+                    <div class="cast-info">
+                      <div class="cast-name" title="<%= actor.name %>"><%= actor.name %></div>
+                      <div class="cast-character" title="<%= actor.character %>"><%= actor.character || 'Role Uncredited' %></div>
+                    </div>
+                  </div>
+                <% }) %>
+              </div>
+
+              <% if (extraCast.length > 0) { %>
+                <div id="full-cast-container" class="cast-grid mt-3 d-none">
+                  <% extraCast.forEach(actor => { %>
+                    <div class="cast-card">
+                      <div class="cast-img-wrapper">
+                        <% if (actor.profile_path) { %>
+                          <img
+                            src="https://image.tmdb.org/t/p/w185<%= actor.profile_path %>"
+                            alt="<%= actor.name %>"
+                            class="cast-img"
+                            loading="lazy"
+                            decoding="async"
+                          >
+                        <% } else { %>
+                          <div class="d-flex align-items-center justify-content-center h-100 text-muted">
+                            <i class="bi bi-person-fill fs-1 opacity-25"></i>
+                          </div>
+                        <% } %>
+                      </div>
+                      <div class="cast-info">
+                        <div class="cast-name" title="<%= actor.name %>"><%= actor.name %></div>
+                        <div class="cast-character" title="<%= actor.character %>"><%= actor.character || 'Role Uncredited' %></div>
+                      </div>
+                    </div>
+                  <% }) %>
+                </div>
+
+                <div class="text-center mt-3 pt-2">
+                  <button id="toggle-cast-btn" class="btn btn-outline-light btn-sm px-3" onclick="toggleFullCast()">
+                    <i class="bi bi-people me-1"></i> View Full Cast (<%= allCast.length %>)
+                  </button>
+                </div>
+              <% } %>
+            </section>
+          <% } %>
+
+          <!-- CREW & CREATORS SECTION -->
+          <% if (creators.length > 0 || directors.length > 0 || writers.length > 0 || producers.length > 0 || composers.length > 0 || cinematographers.length > 0) { %>
+            <section class="detail-section-card">
+              <div class="eyebrow">Creative Team</div>
+              <h2 class="h4 mb-3 text-light">Creators & Key Crew</h2>
+
+              <div class="crew-grid">
+                <% if (creators.length > 0) { %>
+                  <div class="crew-card">
+                    <div class="crew-role"><i class="bi bi-person-badge me-1"></i> Created By</div>
+                    <div class="crew-name"><%= creators.join(', ') %></div>
+                  </div>
+                <% } %>
+
+                <% if (directors.length > 0) { %>
+                  <div class="crew-card">
+                    <div class="crew-role"><i class="bi bi-camera-reels me-1"></i> Directors</div>
+                    <div class="crew-name"><%= directors.slice(0, 3).join(', ') %></div>
+                  </div>
+                <% } %>
+
+                <% if (writers.length > 0) { %>
+                  <div class="crew-card">
+                    <div class="crew-role"><i class="bi bi-pen me-1"></i> Writers / Screenplay</div>
+                    <div class="crew-name"><%= writers.slice(0, 3).join(', ') %></div>
+                  </div>
+                <% } %>
+
+                <% if (producers.length > 0) { %>
+                  <div class="crew-card">
+                    <div class="crew-role"><i class="bi bi-briefcase me-1"></i> Executive Producers</div>
+                    <div class="crew-name"><%= producers.slice(0, 3).join(', ') %></div>
+                  </div>
+                <% } %>
+
+                <% if (composers.length > 0) { %>
+                  <div class="crew-card">
+                    <div class="crew-role"><i class="bi bi-music-note-beamed me-1"></i> Music / Score</div>
+                    <div class="crew-name"><%= composers.slice(0, 2).join(', ') %></div>
+                  </div>
+                <% } %>
+
+                <% if (cinematographers.length > 0) { %>
+                  <div class="crew-card">
+                    <div class="crew-role"><i class="bi bi-camera me-1"></i> Cinematography</div>
+                    <div class="crew-name"><%= cinematographers.slice(0, 2).join(', ') %></div>
+                  </div>
+                <% } %>
+              </div>
+            </section>
+          <% } %>
+
+          <!-- TRAILER SECTION -->
+          <% if (trailerVideo && trailerVideo.key) { %>
+            <section class="detail-section-card">
+              <div class="d-flex justify-content-between align-items-center mb-3">
+                <div>
+                  <div class="eyebrow">Video & Clips</div>
+                  <h2 class="h4 mb-0 text-light"><%= trailerVideo.name || 'Official Trailer' %></h2>
+                </div>
+                <span class="badge bg-dark border border-secondary text-muted">YouTube</span>
+              </div>
+
+              <div id="trailer-player-box" class="trailer-preview" onclick="loadTrailerIframe('<%= trailerVideo.key %>')">
+                <img
+                  src="https://img.youtube.com/vi/<%= trailerVideo.key %>/hqdefault.jpg"
+                  alt="<%= series.name %> trailer thumbnail"
+                  loading="lazy"
+                  decoding="async"
+                >
+                <div class="trailer-play-btn">
+                  <i class="bi bi-play-fill ms-1"></i>
+                </div>
+              </div>
+            </section>
+          <% } %>
+
+          <!-- REVIEWS SECTION -->
+          <section class="detail-section-card">
             <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
               <div>
                 <div class="eyebrow">Your Review</div>
                 <h2 class="h4 mb-1"><%= userReview ? 'Edit your rating' : 'Rate this series' %></h2>
-                <p class="text-muted mb-0">One review per browser. You can update it anytime.</p>
+                <p class="text-muted mb-0">Share your thoughts with the Wysteria community.</p>
               </div>
               <% if (userReview) { %>
                 <span class="badge badge-you">You rated <%= userReview.rating %>/5</span>
@@ -210,7 +516,7 @@
                   class="form-control"
                   id="comment"
                   name="comment"
-                  rows="4"
+                  rows="3"
                   placeholder="Share what stood out to you..."
                 ><%= userReview ? userReview.comment : '' %></textarea>
               </div>
@@ -222,14 +528,15 @@
             </form>
           </section>
 
-          <section class="comments-panel">
+          <!-- COMMUNITY REVIEWS LIST -->
+          <section class="detail-section-card">
             <div class="d-flex justify-content-between align-items-center mb-3">
               <div>
-                <div class="eyebrow">Community</div>
-                <h2 class="h4 mb-0">Reviews</h2>
+                <div class="eyebrow">Community Feedback</div>
+                <h2 class="h4 mb-0">User Reviews</h2>
               </div>
               <span class="rating-pill">
-                <i class="bi bi-star-fill"></i>
+                <i class="bi bi-star-fill text-warning"></i>
                 <%= reviews.length %>
               </span>
             </div>
@@ -243,7 +550,7 @@
 
             <% reviews.forEach((reviewItem) => { %>
               <article class="comment-item">
-                <p class="fw-bold mb-1">
+                <p class="fw-bold mb-1 text-light">
                   <%= reviewItem.userId ? (reviewItem.userId.displayName || reviewItem.userId.username) : 'Wysteria user' %>
                 </p>
 
@@ -271,12 +578,213 @@
               </article>
             <% }) %>
           </section>
-        </section>
+
+        </div>
+
+        <!-- RIGHT / SIDEBAR COLUMN (SPECS & NETWORKS) -->
+        <div class="col-lg-4">
+          
+          <!-- SERIES SPECIFICATIONS -->
+          <section class="detail-section-card mt-0">
+            <div class="eyebrow">Information</div>
+            <h2 class="h4 mb-3 text-light">Series Details</h2>
+
+            <div class="d-flex flex-column gap-3">
+              <div class="spec-item">
+                <div class="spec-label"><i class="bi bi-calendar-event me-1"></i> First Air Date</div>
+                <div class="spec-value"><%= formatDate(series.first_air_date) %></div>
+              </div>
+
+              <% if (series.last_air_date) { %>
+                <div class="spec-item">
+                  <div class="spec-label"><i class="bi bi-calendar-check me-1"></i> Last Air Date</div>
+                  <div class="spec-value"><%= formatDate(series.last_air_date) %></div>
+                </div>
+              <% } %>
+
+              <% if (series.number_of_seasons) { %>
+                <div class="spec-item">
+                  <div class="spec-label"><i class="bi bi-collection-play me-1"></i> Total Seasons & Episodes</div>
+                  <div class="spec-value"><%= series.number_of_seasons %> Seasons • <%= series.number_of_episodes %> Episodes</div>
+                </div>
+              <% } %>
+
+              <% if (epRuntime) { %>
+                <div class="spec-item">
+                  <div class="spec-label"><i class="bi bi-hourglass-split me-1"></i> Episode Runtime</div>
+                  <div class="spec-value"><%= epRuntime %></div>
+                </div>
+              <% } %>
+
+              <div class="spec-item">
+                <div class="spec-label"><i class="bi bi-translate me-1"></i> Original Language</div>
+                <div class="spec-value"><%= languageName %></div>
+              </div>
+
+              <% if (series.status) { %>
+                <div class="spec-item">
+                  <div class="spec-label"><i class="bi bi-check-circle me-1"></i> Status</div>
+                  <div class="spec-value"><%= series.status %></div>
+                </div>
+              <% } %>
+
+              <% if (series.type) { %>
+                <div class="spec-item">
+                  <div class="spec-label"><i class="bi bi-film me-1"></i> Series Type</div>
+                  <div class="spec-value"><%= series.type %></div>
+                </div>
+              <% } %>
+
+              <% if (series.production_countries && series.production_countries.length > 0) { %>
+                <div class="spec-item">
+                  <div class="spec-label"><i class="bi bi-globe me-1"></i> Production Countries</div>
+                  <div class="spec-value"><%= series.production_countries.map(c => c.name).join(', ') %></div>
+                </div>
+              <% } %>
+            </div>
+          </section>
+
+          <!-- NETWORKS & CHANNELS -->
+          <% if (series.networks && series.networks.length > 0) { %>
+            <section class="detail-section-card">
+              <div class="eyebrow">Broadcasters</div>
+              <h2 class="h5 mb-3 text-light">Networks</h2>
+
+              <div class="d-flex flex-wrap gap-2">
+                <% series.networks.forEach(net => { %>
+                  <div class="company-badge">
+                    <% if (net.logo_path) { %>
+                      <img
+                        src="https://image.tmdb.org/t/p/w185<%= net.logo_path %>"
+                        alt="<%= net.name %> logo"
+                        class="company-logo"
+                        loading="lazy"
+                        decoding="async"
+                      >
+                    <% } else { %>
+                      <i class="bi bi-broadcast text-muted"></i>
+                    <% } %>
+                    <span><%= net.name %></span>
+                  </div>
+                <% }) %>
+              </div>
+            </section>
+          <% } %>
+
+          <!-- PRODUCTION COMPANIES -->
+          <% if (series.production_companies && series.production_companies.length > 0) { %>
+            <section class="detail-section-card">
+              <div class="eyebrow">Studios</div>
+              <h2 class="h5 mb-3 text-light">Production Companies</h2>
+
+              <div class="d-flex flex-wrap gap-2">
+                <% series.production_companies.forEach(company => { %>
+                  <div class="company-badge">
+                    <% if (company.logo_path) { %>
+                      <img
+                        src="https://image.tmdb.org/t/p/w185<%= company.logo_path %>"
+                        alt="<%= company.name %> logo"
+                        class="company-logo"
+                        loading="lazy"
+                        decoding="async"
+                      >
+                    <% } else { %>
+                      <i class="bi bi-buildings text-muted"></i>
+                    <% } %>
+                    <span><%= company.name %></span>
+                  </div>
+                <% }) %>
+              </div>
+            </section>
+          <% } %>
+
+        </div>
       </div>
+
+      <!-- SIMILAR & RECOMMENDED SERIES -->
+      <% if (combinedSimilar.length > 0) { %>
+        <section class="detail-section-card mt-4">
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <div>
+              <div class="eyebrow">Recommendations</div>
+              <h2 class="h4 mb-0 text-light">You May Also Like</h2>
+            </div>
+            <span class="text-muted small"><%= combinedSimilar.length %> Titles</span>
+          </div>
+
+          <div class="random-movie-grid">
+            <% combinedSimilar.forEach(sim => { %>
+              <div class="random-movie-card">
+                <a href="/series/<%= sim.id %>" class="movie-card-link text-decoration-none">
+                  <div class="movie-card h-100">
+                    <div class="movie-card-img-wrapper">
+                      <img
+                        src="https://image.tmdb.org/t/p/w342<%= sim.poster_path %>"
+                        alt="<%= sim.name %>"
+                        class="movie-img"
+                        loading="lazy"
+                        decoding="async"
+                      >
+                    </div>
+                    <div class="movie-card-body">
+                      <h3 class="movie-title text-truncate" title="<%= sim.name %>"><%= sim.name %></h3>
+                      <div class="movie-meta d-flex justify-content-between align-items-center mt-2">
+                        <span class="text-muted small">
+                          <%= sim.first_air_date ? sim.first_air_date.split('-')[0] : 'N/A' %>
+                        </span>
+                        <% if (sim.vote_average) { %>
+                          <span class="rating-pill p-1 px-2" style="font-size: 0.72rem;">
+                            <i class="bi bi-star-fill text-warning"></i>
+                            <%= sim.vote_average.toFixed(1) %>
+                          </span>
+                        <% } %>
+                      </div>
+                    </div>
+                  </div>
+                </a>
+              </div>
+            <% }) %>
+          </div>
+        </section>
+      <% } %>
+
     </div>
   </main>
 
   <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.min.js"></script>
+
+  <script>
+    function toggleFullCast() {
+      const container = document.getElementById('full-cast-container');
+      const btn = document.getElementById('toggle-cast-btn');
+      if (container && btn) {
+        if (container.classList.contains('d-none')) {
+          container.classList.remove('d-none');
+          btn.innerHTML = '<i class="bi bi-chevron-up me-1"></i> Show Less';
+        } else {
+          container.classList.add('d-none');
+          btn.innerHTML = '<i class="bi bi-people me-1"></i> View Full Cast (<%= allCast.length %>)';
+        }
+      }
+    }
+
+    function loadTrailerIframe(videoKey) {
+      const box = document.getElementById('trailer-player-box');
+      if (box) {
+        box.innerHTML = `
+          <iframe
+            src="https://www.youtube-nocookie.com/embed/${videoKey}?autoplay=1&rel=0"
+            title="Series Trailer"
+            class="w-100 h-100 border-0"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowfullscreen
+          ></iframe>
+        `;
+        box.style.cursor = 'default';
+        box.onclick = null;
+      }
+    }
+  </script>
 </body>
 </html>

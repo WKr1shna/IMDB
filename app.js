@@ -601,7 +601,11 @@ app.get('/series', isloggedin, async (req, res)=> {
 
 app.get('/series/:id', isloggedin, async (req, res) => {
     try {
-        const series = await fetchTmdbCached(`https://api.themoviedb.org/3/tv/${req.params.id}`, {}, 1000 * 60 * 60);
+        const series = await fetchTmdbCached(
+            `https://api.themoviedb.org/3/tv/${req.params.id}`,
+            { append_to_response: 'credits,videos,similar,recommendations,content_ratings' },
+            1000 * 60 * 60
+        );
         const watchlistMovie = await Watchlist.findOne({
             userId: req.session.userId,
             tmdbId: Number(req.params.id),
