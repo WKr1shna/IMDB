@@ -151,6 +151,15 @@
           <h1 class="page-title"><%= pageTitle || 'Browse TV Series' %></h1>
           <p class="page-subtitle"><%= pageSubtitle || 'Track shows, write thoughts, and stream episodes.' %></p>
         </div>
+        <div>
+          <button class="btn btn-outline-warning btn-sm d-flex align-items-center gap-2" type="button" data-bs-toggle="collapse" data-bs-target="#filter-panel-collapse" aria-expanded="<%= (selectedGenre || selectedYear || searchQuery || showFilters) ? 'true' : 'false' %>">
+            <i class="bi bi-funnel"></i>
+            <span>Filters</span>
+            <% if (selectedGenre || selectedYear || searchQuery || (selectedSort && selectedSort !== 'popularity.desc')) { %>
+              <span class="badge bg-warning text-dark rounded-pill ms-1" style="font-size: 0.65rem;">Active</span>
+            <% } %>
+          </button>
+        </div>
       </section>
 
       <!-- Advanced Filter Panel -->
@@ -270,5 +279,33 @@
   </main>
   <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.min.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const filterCollapse = document.getElementById('filter-panel-collapse');
+      if (filterCollapse) {
+        filterCollapse.addEventListener('shown.bs.collapse', () => {
+          filterCollapse.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        });
+
+        const navBtn = document.getElementById('navFilterToggleBtn');
+        if (navBtn) {
+          navBtn.addEventListener('click', () => {
+            setTimeout(() => {
+              if (filterCollapse.classList.contains('show')) {
+                filterCollapse.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              }
+            }, 50);
+          });
+        }
+
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('showFilters') === 'true') {
+          setTimeout(() => {
+            filterCollapse.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }, 200);
+        }
+      }
+    });
+  </script>
 </body>
 </html>
