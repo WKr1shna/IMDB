@@ -92,59 +92,6 @@
         </section>
       <% } %>
 
-      <% if (surpriseSeries.length > 0) { %>
-        <section class="random-movies-section" aria-label="Random series recommendations">
-          <div class="section-header compact-section-header">
-            <div>
-              <div class="eyebrow">Fresh Mix</div>
-              <h1 class="random-section-title">Surprise Picks</h1>
-              <p class="page-subtitle">A rotating set of well-loved TV shows from different corners of the library.</p>
-            </div>
-          </div>
-
-          <div class="random-movie-grid">
-            <% for (let series of surpriseSeries) { %>
-              <article class="movie-card random-movie-card">
-                <div class="poster-frame">
-                  <% if (series.poster_path) { %>
-                    <img
-                      src="https://image.tmdb.org/t/p/w342<%= series.poster_path %>"
-                      class="movie-img"
-                      alt="<%= series.name %> poster"
-                      loading="lazy"
-                      decoding="async"
-                    >
-                  <% } else { %>
-                    <div class="poster-placeholder">
-                      <i class="bi bi-tv animate-flicker"></i>
-                    </div>
-                  <% } %>
-                </div>
-                <div class="movie-card-body">
-                  <div class="d-flex justify-content-between align-items-start gap-3">
-                    <div>
-                      <h2 class="movie-title">
-                        <%= series.name %>
-                      </h2>
-                      <div class="movie-meta">
-                        <%= series.first_air_date ? series.first_air_date.split('-')[0] : 'N/A' %>
-                      </div>
-                    </div>
-                    <span class="rating-pill">
-                      <i class="bi bi-star-fill"></i>
-                      <%= series.avgRating ? series.avgRating.toFixed(1) : '0.0' %>
-                    </span>
-                  </div>
-                  <a href="/series/<%= series.id %>" class="btn btn-primary mt-auto">
-                    <i class="bi bi-eye me-1"></i> View Details
-                  </a>
-                </div>
-              </article>
-            <% } %>
-          </div>
-        </section>
-      <% } %>
-
       <%
         const tvGenres = {
           '10759': 'Action & Adventure',
@@ -175,7 +122,7 @@
         const activeFilterCount = (selectedGenre ? 1 : 0) + (selectedYear ? 1 : 0) + (selectedSort && selectedSort !== 'popularity.desc' ? 1 : 0);
       %>
 
-      <section class="section-header">
+      <section class="section-header <%= carouselSeries.length > 0 ? 'mt-4' : '' %>">
         <div>
           <div class="eyebrow">Wysteria Library</div>
           <h1 class="page-title"><%= pageTitle || 'Browse TV Series' %></h1>
@@ -386,7 +333,7 @@
       </div>
 
       <% if (allSeries.length === 0) { %>
-        <div class="empty-state">
+        <div class="empty-state mb-5">
           <i class="bi bi-tv fs-1 text-warning"></i>
           <h2 class="h4 mt-3">No series found</h2>
           <p class="text-muted mb-3">Try another search.</p>
@@ -432,6 +379,59 @@
           </article>
         <% } %>
       </section>
+
+      <% if (surpriseSeries.length > 0) { %>
+        <section class="random-movies-section mt-5 pt-4 border-top border-secondary border-opacity-10" aria-label="Random series recommendations">
+          <div class="section-header compact-section-header mb-4">
+            <div>
+              <div class="eyebrow">Fresh Mix</div>
+              <h1 class="random-section-title">Surprise Picks</h1>
+              <p class="page-subtitle">A rotating set of well-loved TV shows from different corners of the library.</p>
+            </div>
+          </div>
+
+          <div class="random-movie-grid">
+            <% for (let series of surpriseSeries) { %>
+              <article class="movie-card random-movie-card">
+                <div class="poster-frame">
+                  <% if (series.poster_path) { %>
+                    <img
+                      src="https://image.tmdb.org/t/p/w342<%= series.poster_path %>"
+                      class="movie-img"
+                      alt="<%= series.name %> poster"
+                      loading="lazy"
+                      decoding="async"
+                    >
+                  <% } else { %>
+                    <div class="poster-placeholder">
+                      <i class="bi bi-tv animate-flicker"></i>
+                    </div>
+                  <% } %>
+                </div>
+                <div class="movie-card-body">
+                  <div class="d-flex justify-content-between align-items-start gap-3">
+                    <div>
+                      <h2 class="movie-title">
+                        <%= series.name %>
+                      </h2>
+                      <div class="movie-meta">
+                        <%= series.first_air_date ? series.first_air_date.split('-')[0] : 'N/A' %>
+                      </div>
+                    </div>
+                    <span class="rating-pill">
+                      <i class="bi bi-star-fill"></i>
+                      <%= series.avgRating ? series.avgRating.toFixed(1) : '0.0' %>
+                    </span>
+                  </div>
+                  <a href="/series/<%= series.id %>" class="btn btn-primary mt-auto">
+                    <i class="bi bi-eye me-1"></i> View Details
+                  </a>
+                </div>
+              </article>
+            <% } %>
+          </div>
+        </section>
+      <% } %>
     </div>
   </main>
   <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js"></script>
