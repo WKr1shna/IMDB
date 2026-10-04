@@ -3,13 +3,17 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title><%= movie.title %> | Wysteria</title>
+  <title><%= movie.title %> (<%= movie.release_date ? movie.release_date.split('-')[0] : 'N/A' %>) | Wysteria</title>
+  
   <link rel="preconnect" href="https://cdn.jsdelivr.net">
+  <link rel="preconnect" href="https://image.tmdb.org">
+
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
   <link rel="icon" type="image/png" href="/favicon.png">
   <link rel="apple-touch-icon" href="/favicon.png">
   <link href="/styles.css" rel="stylesheet">
+  
   <style>
     .rating-stars {
       display: flex;
@@ -71,110 +75,418 @@
   <%- include('./navbar.ejs') %>
 
   <%
+    // Helper formatters
+    const formatCurrency = (val) => {
+      const num = Number(val);
+      return num && num > 0 ? '$' + num.toLocaleString('en-US') : null;
+    };
+
+    const formatRuntime = (mins) => {
+      if (!mins || mins <= 0) return 'N/A';
+      const h = Math.floor(mins / 60);
+      const m = mins % 60;
+      return h > 0 ? `${h}h ${m}m (${mins} min)` : `${m} min`;
+    };
+
+    const formatDate = (dateStr) => {
+      if (!dateStr) return 'N/A';
+      const parts = dateStr.split('-');
+      if (parts.length !== 3) return dateStr;
+      const d = new Date(dateStr);
+      return isNaN(d.getTime()) ? dateStr : d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+    };
+
+    // User reviews calculations
     const currentUserRating = userReview ? Number(userReview.rating) : 0;
     const avgRating = reviews.length > 0
       ? reviews.reduce((sum, review) => sum + Number(review.rating || 0), 0) / reviews.length
       : 0;
+
+    // Content Certification (Age Rating)
+    let certification = null;
+    if (movie.release_dates && movie.release_dates.results && Array.isArray(movie.release_dates.results)) {
+      const usRelease = movie.release_dates.results.find(r => r.iso_3166_1 === 'US');
+      if (usRelease && usRelease.release_dates) {
+        const certItem = usRelease.release_dates.find(rd => rd.certification && rd.certification.trim());
+        if (certItem) certification = certItem.certification.trim();
+      }
+      if (!certification) {
+        for (const item of movie.release_dates.results) {
+          if (item.release_dates) {
+            const anyCert = item.release_dates.find(rd => rd.certification && rd.certification.trim());
+            if (anyCert) {
+              certification = anyCert.certification.trim();
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    // Original Language display name
+    let languageName = movie.original_language ? movie.original_language.toUpperCase() : 'N/A';
+    if (movie.spoken_languages && Array.isArray(movie.spoken_languages)) {
+      const langObj = movie.spoken_languages.find(l => l.iso_639_1 === movie.original_language);
+      if (langObj) {
+        languageName = langObj.english_name || langObj.name || languageName;
+      } else if (movie.spoken_languages.length > 0) {
+        languageName = movie.spoken_languages[0].english_name || movie.spoken_languages[0].name || languageName;
+      }
+    }
+
+    // Cast members
+    const allCast = (movie.credits && movie.credits.cast && Array.isArray(movie.credits.cast)) ? movie.credits.cast : [];
+    const initialCastLimit = 14;
+    const initialCast = allCast.slice(0, initialCastLimit);
+    const extraCast = allCast.slice(initialCastLimit);
+
+    // Crew categorization
+    const allCrew = (movie.credits && movie.credits.crew && Array.isArray(movie.credits.crew)) ? movie.credits.crew : [];
+    const directors = allCrew.filter(c => c.job === 'Director').map(c => c.name);
+    const writers = [...new Set(allCrew.filter(c => ['Screenplay', 'Writer', 'Story', 'Author'].includes(c.job)).map(c => c.name))];
+    const producers = [...new Set(allCrew.filter(c => ['Producer', 'Executive Producer'].includes(c.job)).map(c => c.name))];
+    const composers = [...new Set(allCrew.filter(c => ['Original Music Composer', 'Music', 'Composer'].includes(c.job)).map(c => c.name))];
+    const cinematographers = [...new Set(allCrew.filter(c => ['Director of Photography', 'Cinematography'].includes(c.job)).map(c => c.name))];
+    const editors = [...new Set(allCrew.filter(c => ['Editor'].includes(c.job)).map(c => c.name))];
+
+    // Trailer extraction
+    let trailerVideo = null;
+    if (movie.videos && movie.videos.results && Array.isArray(movie.videos.results)) {
+      trailerVideo = movie.videos.results.find(v => v.site === 'YouTube' && v.type === 'Trailer' && v.official)
+        || movie.videos.results.find(v => v.site === 'YouTube' && v.type === 'Trailer')
+        || movie.videos.results.find(v => v.site === 'YouTube' && v.type === 'Teaser')
+        || movie.videos.results.find(v => v.site === 'YouTube');
+    }
+
+    // Similar & Recommended Movies (deduplicated)
+    const recsList = (movie.recommendations && movie.recommendations.results && Array.isArray(movie.recommendations.results)) ? movie.recommendations.results : [];
+    const simList = (movie.similar && movie.similar.results && Array.isArray(movie.similar.results)) ? movie.similar.results : [];
+    
+    const seenIds = new Set([movie.id]);
+    const combinedSimilar = [];
+    for (const m of [...recsList, ...simList]) {
+      if (m && m.id && !seenIds.has(m.id) && m.poster_path) {
+        seenIds.add(m.id);
+        combinedSimilar.push(m);
+        if (combinedSimilar.length >= 12) break;
+      }
+    }
   %>
 
   <main class="page-shell">
     <div class="container">
-      <div class="detail-layout">
-        <aside class="detail-poster-panel">
-          <div class="poster-frame">
-            <% if (movie.poster_path) { %>
-              <img
-                src="https://image.tmdb.org/t/p/w500<%= movie.poster_path %>"
-                class="detail-poster"
-                alt="<%= movie.title %> poster"
-                fetchpriority="high"
-                decoding="async"
-              >
-            <% } else { %>
-              <div class="poster-placeholder">
-                <i class="bi bi-film"></i>
-              </div>
-            <% } %>
-          </div>
-        </aside>
-
-        <section>
-          <div class="detail-content">
-            <div class="eyebrow">Movie Details</div>
-            <h1 class="page-title"><%= movie.title %></h1>
-            <p class="page-subtitle mb-4">
-              <%= movie.overview || 'No overview available.' %>
-            </p>
-
-            <div class="d-flex flex-wrap gap-2 mb-4">
-              <span class="rating-pill">
-                <i class="bi bi-star-fill"></i>
-                <%= avgRating.toFixed(1) %>
-              </span>
-              <span class="btn btn-outline-light disabled">
-                <i class="bi bi-calendar3 me-1"></i>
-                <%= movie.release_date ? movie.release_date.split('-')[0] : 'N/A' %>
-              </span>
-              <span class="btn btn-outline-light disabled">
-                <i class="bi bi-chat-left-text me-1"></i>
-                <%= reviews.length %>
-              </span>
-            </div>
-
-            <div class="d-flex flex-wrap align-items-center gap-2">
-              <a href="/watch/<%= movie.id %>" class="btn btn-watch">
-                <i class="bi bi-play-circle me-1"></i>
-                Watch Movie
-              </a>
-
-               <% if (watchlistMovie) { %>
-                <form action="/watchlist/add" method="POST" class="m-0">
-                  <input type="hidden" name="tmdbId" value="<%= movie.id %>">
-                  <input type="hidden" name="title" value="<%= movie.title %>">
-                  <input type="hidden" name="posterPath" value="<%= movie.poster_path || '' %>">
-                  <input type="hidden" name="mediaType" value="movie">
-                  <label for="watchStatus" class="visually-hidden">Watchlist status</label>
-                  <select
-                    id="watchStatus"
-                    name="status"
-                    class="form-select"
-                    onchange="this.form.submit()"
-                    aria-label="Change watchlist status"
+      
+      <!-- HERO & BACKDROP BANNER -->
+      <section class="movie-backdrop-hero" <% if (movie.backdrop_path) { %>style="background-image: url('https://image.tmdb.org/t/p/w1280<%= movie.backdrop_path %>');"<% } %>>
+        <div class="movie-hero-content">
+          <div class="detail-layout">
+            
+            <!-- Poster Aside -->
+            <aside class="detail-poster-panel">
+              <div class="poster-frame">
+                <% if (movie.poster_path) { %>
+                  <img
+                    src="https://image.tmdb.org/t/p/w500<%= movie.poster_path %>"
+                    class="detail-poster"
+                    alt="<%= movie.title %> poster"
+                    fetchpriority="high"
+                    decoding="async"
                   >
-                    <% ['Plan to Watch', 'Watching', 'Completed', 'On hold', 'Dropped'].forEach((statusOption) => { %>
-                      <option value="<%= statusOption %>" <%= watchlistMovie.status === statusOption ? 'selected' : '' %>>
-                        <%= statusOption %>
-                      </option>
-                    <% }) %>
-                  </select>
-                </form>
-              <% } else { %>
-                <form action="/watchlist/add" method="POST" class="m-0">
-                  <input type="hidden" name="tmdbId" value="<%= movie.id %>">
-                  <input type="hidden" name="title" value="<%= movie.title %>">
-                  <input type="hidden" name="posterPath" value="<%= movie.poster_path || '' %>">
-                  <input type="hidden" name="status" value="Plan to Watch">
-                  <input type="hidden" name="mediaType" value="movie">
-                  <button class="btn btn-warning">
-                    <i class="bi bi-bookmark-plus me-1"></i>
-                    Add to Watchlist
-                  </button>
-                </form>
+                <% } else { %>
+                  <div class="poster-placeholder">
+                    <i class="bi bi-film"></i>
+                  </div>
+                <% } %>
+              </div>
+            </aside>
+
+            <!-- Main Hero Details -->
+            <div class="detail-content p-0">
+              <div class="eyebrow mb-2">Movie Overview</div>
+              
+              <h1 class="page-title mb-2">
+                <%= movie.title %>
+                <% if (movie.release_date) { %>
+                  <span class="text-muted fw-normal fs-4">(<%= movie.release_date.split('-')[0] %>)</span>
+                <% } %>
+              </h1>
+
+              <% if (movie.original_title && movie.original_title.toLowerCase() !== movie.title.toLowerCase()) { %>
+                <div class="text-muted small mb-2 fst-italic">
+                  Original Title: <span class="text-light"><%= movie.original_title %></span>
+                </div>
               <% } %>
 
-              <a href="/" class="btn btn-outline-light">
-                <i class="bi bi-arrow-left me-1"></i>
-                Back
-              </a>
+              <% if (movie.tagline) { %>
+                <div class="movie-tagline">"<%= movie.tagline %>"</div>
+              <% } %>
+
+              <!-- Badges & Ratings Strip -->
+              <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+                <% if (certification) { %>
+                  <span class="movie-cert-badge"><%= certification %></span>
+                <% } %>
+                
+                <% if (movie.vote_average) { %>
+                  <span class="movie-meta-badge" title="TMDB Rating">
+                    <i class="bi bi-star-fill text-warning"></i>
+                    <%= movie.vote_average.toFixed(1) %>/10
+                    <% if (movie.vote_count) { %>
+                      <span class="text-muted small">(<%= Number(movie.vote_count).toLocaleString() %>)</span>
+                    <% } %>
+                  </span>
+                <% } %>
+
+                <span class="movie-meta-badge" title="Wysteria Community Rating">
+                  <i class="bi bi-heart-fill text-danger"></i>
+                  <%= avgRating > 0 ? avgRating.toFixed(1) + '/5' : 'No ratings' %>
+                  <span class="text-muted small">(<%= reviews.length %> reviews)</span>
+                </span>
+
+                <% if (movie.runtime) { %>
+                  <span class="movie-meta-badge">
+                    <i class="bi bi-clock me-1 text-muted"></i>
+                    <%= formatRuntime(movie.runtime) %>
+                  </span>
+                <% } %>
+
+                <% if (movie.status && movie.status !== 'Released') { %>
+                  <span class="movie-meta-badge">
+                    <i class="bi bi-info-circle me-1 text-muted"></i>
+                    <%= movie.status %>
+                  </span>
+                <% } %>
+              </div>
+
+              <!-- Genres -->
+              <% if (movie.genres && movie.genres.length > 0) { %>
+                <div class="d-flex flex-wrap gap-2 mb-4">
+                  <% movie.genres.forEach(genre => { %>
+                    <span class="genre-pill"><%= genre.name %></span>
+                  <% }) %>
+                </div>
+              <% } %>
+
+              <!-- Overview Text -->
+              <p class="page-subtitle mb-4 text-light" style="line-height: 1.6; font-size: 1.02rem;">
+                <%= movie.overview || 'No synopsis available for this title.' %>
+              </p>
+
+              <!-- Action Buttons -->
+              <div class="d-flex flex-wrap align-items-center gap-3">
+                <a href="/watch/<%= movie.id %>" class="btn btn-watch px-4 py-2">
+                  <i class="bi bi-play-circle-fill me-2 fs-5 align-middle"></i>
+                  Watch Movie
+                </a>
+
+                <% if (watchlistMovie) { %>
+                  <form action="/watchlist/add" method="POST" class="m-0">
+                    <input type="hidden" name="tmdbId" value="<%= movie.id %>">
+                    <input type="hidden" name="title" value="<%= movie.title %>">
+                    <input type="hidden" name="posterPath" value="<%= movie.poster_path || '' %>">
+                    <input type="hidden" name="mediaType" value="movie">
+                    <label for="watchStatus" class="visually-hidden">Watchlist status</label>
+                    <select
+                      id="watchStatus"
+                      name="status"
+                      class="form-select"
+                      onchange="this.form.submit()"
+                      aria-label="Change watchlist status"
+                      style="min-width: 170px;"
+                    >
+                      <% ['Plan to Watch', 'Watching', 'Completed', 'On hold', 'Dropped'].forEach((statusOption) => { %>
+                        <option value="<%= statusOption %>" <%= watchlistMovie.status === statusOption ? 'selected' : '' %>>
+                          <%= statusOption %>
+                        </option>
+                      <% }) %>
+                    </select>
+                  </form>
+                <% } else { %>
+                  <form action="/watchlist/add" method="POST" class="m-0">
+                    <input type="hidden" name="tmdbId" value="<%= movie.id %>">
+                    <input type="hidden" name="title" value="<%= movie.title %>">
+                    <input type="hidden" name="posterPath" value="<%= movie.poster_path || '' %>">
+                    <input type="hidden" name="status" value="Plan to Watch">
+                    <input type="hidden" name="mediaType" value="movie">
+                    <button class="btn btn-warning px-3">
+                      <i class="bi bi-bookmark-plus me-1"></i>
+                      Add to Watchlist
+                    </button>
+                  </form>
+                <% } %>
+
+                <a href="/" class="btn btn-outline-light px-3">
+                  <i class="bi bi-arrow-left me-1"></i>
+                  Back
+                </a>
+              </div>
+
             </div>
           </div>
+        </div>
+      </section>
 
-          <section class="review-panel">
+      <div class="row g-4">
+        <!-- LEFT / MAIN COLUMN -->
+        <div class="col-lg-8">
+          
+          <!-- CAST SECTION -->
+          <% if (allCast.length > 0) { %>
+            <section class="detail-section-card mt-0">
+              <div class="d-flex justify-content-between align-items-center mb-3">
+                <div>
+                  <div class="eyebrow">Top Billed Cast</div>
+                  <h2 class="h4 mb-0 text-light">Cast Members</h2>
+                </div>
+                <span class="badge bg-dark border border-secondary text-muted"><%= allCast.length %> Total</span>
+              </div>
+
+              <div class="cast-grid">
+                <% initialCast.forEach(actor => { %>
+                  <div class="cast-card">
+                    <div class="cast-img-wrapper">
+                      <% if (actor.profile_path) { %>
+                        <img
+                          src="https://image.tmdb.org/t/p/w185<%= actor.profile_path %>"
+                          alt="<%= actor.name %>"
+                          class="cast-img"
+                          loading="lazy"
+                          decoding="async"
+                        >
+                      <% } else { %>
+                        <div class="d-flex align-items-center justify-content-center h-100 text-muted">
+                          <i class="bi bi-person-fill fs-1 opacity-25"></i>
+                        </div>
+                      <% } %>
+                    </div>
+                    <div class="cast-info">
+                      <div class="cast-name" title="<%= actor.name %>"><%= actor.name %></div>
+                      <div class="cast-character" title="<%= actor.character %>"><%= actor.character || 'Role Uncredited' %></div>
+                    </div>
+                  </div>
+                <% }) %>
+              </div>
+
+              <% if (extraCast.length > 0) { %>
+                <div id="full-cast-container" class="cast-grid mt-3 d-none">
+                  <% extraCast.forEach(actor => { %>
+                    <div class="cast-card">
+                      <div class="cast-img-wrapper">
+                        <% if (actor.profile_path) { %>
+                          <img
+                            src="https://image.tmdb.org/t/p/w185<%= actor.profile_path %>"
+                            alt="<%= actor.name %>"
+                            class="cast-img"
+                            loading="lazy"
+                            decoding="async"
+                          >
+                        <% } else { %>
+                          <div class="d-flex align-items-center justify-content-center h-100 text-muted">
+                            <i class="bi bi-person-fill fs-1 opacity-25"></i>
+                          </div>
+                        <% } %>
+                      </div>
+                      <div class="cast-info">
+                        <div class="cast-name" title="<%= actor.name %>"><%= actor.name %></div>
+                        <div class="cast-character" title="<%= actor.character %>"><%= actor.character || 'Role Uncredited' %></div>
+                      </div>
+                    </div>
+                  <% }) %>
+                </div>
+
+                <div class="text-center mt-3 pt-2">
+                  <button id="toggle-cast-btn" class="btn btn-outline-light btn-sm px-3" onclick="toggleFullCast()">
+                    <i class="bi bi-people me-1"></i> View Full Cast (<%= allCast.length %>)
+                  </button>
+                </div>
+              <% } %>
+            </section>
+          <% } %>
+
+          <!-- CREW SECTION -->
+          <% if (directors.length > 0 || writers.length > 0 || producers.length > 0 || composers.length > 0 || cinematographers.length > 0 || editors.length > 0) { %>
+            <section class="detail-section-card">
+              <div class="eyebrow">Creative Team</div>
+              <h2 class="h4 mb-3 text-light">Key Crew</h2>
+
+              <div class="crew-grid">
+                <% if (directors.length > 0) { %>
+                  <div class="crew-card">
+                    <div class="crew-role"><i class="bi bi-camera-reels me-1"></i> Director</div>
+                    <div class="crew-name"><%= directors.join(', ') %></div>
+                  </div>
+                <% } %>
+
+                <% if (writers.length > 0) { %>
+                  <div class="crew-card">
+                    <div class="crew-role"><i class="bi bi-pen me-1"></i> Writers / Screenplay</div>
+                    <div class="crew-name"><%= writers.slice(0, 3).join(', ') %></div>
+                  </div>
+                <% } %>
+
+                <% if (producers.length > 0) { %>
+                  <div class="crew-card">
+                    <div class="crew-role"><i class="bi bi-briefcase me-1"></i> Producers</div>
+                    <div class="crew-name"><%= producers.slice(0, 3).join(', ') %></div>
+                  </div>
+                <% } %>
+
+                <% if (composers.length > 0) { %>
+                  <div class="crew-card">
+                    <div class="crew-role"><i class="bi bi-music-note-beamed me-1"></i> Music / Score</div>
+                    <div class="crew-name"><%= composers.join(', ') %></div>
+                  </div>
+                <% } %>
+
+                <% if (cinematographers.length > 0) { %>
+                  <div class="crew-card">
+                    <div class="crew-role"><i class="bi bi-camera me-1"></i> Cinematography</div>
+                    <div class="crew-name"><%= cinematographers.join(', ') %></div>
+                  </div>
+                <% } %>
+
+                <% if (editors.length > 0) { %>
+                  <div class="crew-card">
+                    <div class="crew-role"><i class="bi bi-scissors me-1"></i> Editing</div>
+                    <div class="crew-name"><%= editors.join(', ') %></div>
+                  </div>
+                <% } %>
+              </div>
+            </section>
+          <% } %>
+
+          <!-- TRAILER SECTION -->
+          <% if (trailerVideo && trailerVideo.key) { %>
+            <section class="detail-section-card">
+              <div class="d-flex justify-content-between align-items-center mb-3">
+                <div>
+                  <div class="eyebrow">Video & Clips</div>
+                  <h2 class="h4 mb-0 text-light"><%= trailerVideo.name || 'Official Trailer' %></h2>
+                </div>
+                <span class="badge bg-dark border border-secondary text-muted">YouTube</span>
+              </div>
+
+              <div id="trailer-player-box" class="trailer-preview" onclick="loadTrailerIframe('<%= trailerVideo.key %>')">
+                <img
+                  src="https://img.youtube.com/vi/<%= trailerVideo.key %>/hqdefault.jpg"
+                  alt="<%= movie.title %> trailer thumbnail"
+                  loading="lazy"
+                  decoding="async"
+                >
+                <div class="trailer-play-btn">
+                  <i class="bi bi-play-fill ms-1"></i>
+                </div>
+              </div>
+            </section>
+          <% } %>
+
+          <!-- REVIEWS SECTION -->
+          <section class="detail-section-card">
             <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
               <div>
                 <div class="eyebrow">Your Review</div>
                 <h2 class="h4 mb-1"><%= userReview ? 'Edit your rating' : 'Rate this movie' %></h2>
-                <p class="text-muted mb-0">One review per browser. You can update it anytime.</p>
+                <p class="text-muted mb-0">Share your thoughts with the Wysteria community.</p>
               </div>
               <% if (userReview) { %>
                 <span class="badge badge-you">You rated <%= userReview.rating %>/5</span>
@@ -204,7 +516,7 @@
                   class="form-control"
                   id="comment"
                   name="comment"
-                  rows="4"
+                  rows="3"
                   placeholder="Share what stood out to you..."
                 ><%= userReview ? userReview.comment : '' %></textarea>
               </div>
@@ -216,14 +528,15 @@
             </form>
           </section>
 
-          <section class="comments-panel">
+          <!-- COMMUNITY REVIEWS LIST -->
+          <section class="detail-section-card">
             <div class="d-flex justify-content-between align-items-center mb-3">
               <div>
-                <div class="eyebrow">Community</div>
-                <h2 class="h4 mb-0">Reviews</h2>
+                <div class="eyebrow">Community Feedback</div>
+                <h2 class="h4 mb-0">User Reviews</h2>
               </div>
               <span class="rating-pill">
-                <i class="bi bi-star-fill"></i>
+                <i class="bi bi-star-fill text-warning"></i>
                 <%= reviews.length %>
               </span>
             </div>
@@ -237,7 +550,7 @@
 
             <% reviews.forEach((reviewItem) => { %>
               <article class="comment-item">
-                <p class="fw-bold mb-1">
+                <p class="fw-bold mb-1 text-light">
                   <%= reviewItem.userId ? (reviewItem.userId.displayName || reviewItem.userId.username) : 'Wysteria user' %>
                 </p>
 
@@ -265,12 +578,179 @@
               </article>
             <% }) %>
           </section>
-        </section>
+
+        </div>
+
+        <!-- RIGHT / SIDEBAR COLUMN (SPECS & PRODUCTION) -->
+        <div class="col-lg-4">
+          
+          <!-- MOVIE SPECIFICATIONS -->
+          <section class="detail-section-card mt-0">
+            <div class="eyebrow">Information</div>
+            <h2 class="h4 mb-3 text-light">Movie Details</h2>
+
+            <div class="d-flex flex-column gap-3">
+              <div class="spec-item">
+                <div class="spec-label"><i class="bi bi-calendar-event me-1"></i> Release Date</div>
+                <div class="spec-value"><%= formatDate(movie.release_date) %></div>
+              </div>
+
+              <div class="spec-item">
+                <div class="spec-label"><i class="bi bi-hourglass-split me-1"></i> Runtime</div>
+                <div class="spec-value"><%= formatRuntime(movie.runtime) %></div>
+              </div>
+
+              <div class="spec-item">
+                <div class="spec-label"><i class="bi bi-translate me-1"></i> Original Language</div>
+                <div class="spec-value"><%= languageName %></div>
+              </div>
+
+              <% const budgetFormatted = formatCurrency(movie.budget); %>
+              <% if (budgetFormatted) { %>
+                <div class="spec-item">
+                  <div class="spec-label"><i class="bi bi-cash-stack me-1"></i> Budget</div>
+                  <div class="spec-value"><%= budgetFormatted %></div>
+                </div>
+              <% } %>
+
+              <% const revenueFormatted = formatCurrency(movie.revenue); %>
+              <% if (revenueFormatted) { %>
+                <div class="spec-item">
+                  <div class="spec-label"><i class="bi bi-graph-up-arrow me-1"></i> Revenue</div>
+                  <div class="spec-value"><%= revenueFormatted %></div>
+                </div>
+              <% } %>
+
+              <% if (movie.status) { %>
+                <div class="spec-item">
+                  <div class="spec-label"><i class="bi bi-check-circle me-1"></i> Status</div>
+                  <div class="spec-value"><%= movie.status %></div>
+                </div>
+              <% } %>
+
+              <% if (movie.production_countries && movie.production_countries.length > 0) { %>
+                <div class="spec-item">
+                  <div class="spec-label"><i class="bi bi-globe me-1"></i> Production Countries</div>
+                  <div class="spec-value"><%= movie.production_countries.map(c => c.name).join(', ') %></div>
+                </div>
+              <% } %>
+            </div>
+          </section>
+
+          <!-- PRODUCTION COMPANIES -->
+          <% if (movie.production_companies && movie.production_companies.length > 0) { %>
+            <section class="detail-section-card">
+              <div class="eyebrow">Studios</div>
+              <h2 class="h5 mb-3 text-light">Production Companies</h2>
+
+              <div class="d-flex flex-wrap gap-2">
+                <% movie.production_companies.forEach(company => { %>
+                  <div class="company-badge">
+                    <% if (company.logo_path) { %>
+                      <img
+                        src="https://image.tmdb.org/t/p/w185<%= company.logo_path %>"
+                        alt="<%= company.name %> logo"
+                        class="company-logo"
+                        loading="lazy"
+                        decoding="async"
+                      >
+                    <% } else { %>
+                      <i class="bi bi-buildings text-muted"></i>
+                    <% } %>
+                    <span><%= company.name %></span>
+                  </div>
+                <% }) %>
+              </div>
+            </section>
+          <% } %>
+
+        </div>
       </div>
+
+      <!-- SIMILAR & RECOMMENDED MOVIES -->
+      <% if (combinedSimilar.length > 0) { %>
+        <section class="detail-section-card mt-4">
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <div>
+              <div class="eyebrow">Recommendations</div>
+              <h2 class="h4 mb-0 text-light">You May Also Like</h2>
+            </div>
+            <span class="text-muted small"><%= combinedSimilar.length %> Titles</span>
+          </div>
+
+          <div class="random-movie-grid">
+            <% combinedSimilar.forEach(sim => { %>
+              <div class="random-movie-card">
+                <a href="/movie/<%= sim.id %>" class="movie-card-link text-decoration-none">
+                  <div class="movie-card h-100">
+                    <div class="movie-card-img-wrapper">
+                      <img
+                        src="https://image.tmdb.org/t/p/w342<%= sim.poster_path %>"
+                        alt="<%= sim.title %>"
+                        class="movie-img"
+                        loading="lazy"
+                        decoding="async"
+                      >
+                    </div>
+                    <div class="movie-card-body">
+                      <h3 class="movie-title text-truncate" title="<%= sim.title %>"><%= sim.title %></h3>
+                      <div class="movie-meta d-flex justify-content-between align-items-center mt-2">
+                        <span class="text-muted small">
+                          <%= sim.release_date ? sim.release_date.split('-')[0] : 'N/A' %>
+                        </span>
+                        <% if (sim.vote_average) { %>
+                          <span class="rating-pill p-1 px-2" style="font-size: 0.72rem;">
+                            <i class="bi bi-star-fill text-warning"></i>
+                            <%= sim.vote_average.toFixed(1) %>
+                          </span>
+                        <% } %>
+                      </div>
+                    </div>
+                  </div>
+                </a>
+              </div>
+            <% }) %>
+          </div>
+        </section>
+      <% } %>
+
     </div>
   </main>
 
   <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.min.js"></script>
+
+  <script>
+    function toggleFullCast() {
+      const container = document.getElementById('full-cast-container');
+      const btn = document.getElementById('toggle-cast-btn');
+      if (container && btn) {
+        if (container.classList.contains('d-none')) {
+          container.classList.remove('d-none');
+          btn.innerHTML = '<i class="bi bi-chevron-up me-1"></i> Show Less';
+        } else {
+          container.classList.add('d-none');
+          btn.innerHTML = '<i class="bi bi-people me-1"></i> View Full Cast (<%= allCast.length %>)';
+        }
+      }
+    }
+
+    function loadTrailerIframe(videoKey) {
+      const box = document.getElementById('trailer-player-box');
+      if (box) {
+        box.innerHTML = `
+          <iframe
+            src="https://www.youtube-nocookie.com/embed/${videoKey}?autoplay=1&rel=0"
+            title="Movie Trailer"
+            class="w-100 h-100 border-0"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowfullscreen
+          ></iframe>
+        `;
+        box.style.cursor = 'default';
+        box.onclick = null;
+      }
+    }
+  </script>
 </body>
 </html>

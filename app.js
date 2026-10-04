@@ -381,7 +381,11 @@ function isloggedin(req,res,next){
 }
 app.get('/movie/:id',isloggedin,async(req,res)=>{
     try{
-        const movie = await fetchTmdbCached(`https://api.themoviedb.org/3/movie/${req.params.id}`, {}, 1000 * 60 * 60);
+        const movie = await fetchTmdbCached(
+            `https://api.themoviedb.org/3/movie/${req.params.id}`,
+            { append_to_response: 'credits,videos,similar,recommendations,release_dates' },
+            1000 * 60 * 60
+        );
         const watchlistMovie= await Watchlist.findOne({
             userId:req.session.userId,
             tmdbId:Number(req.params.id),
