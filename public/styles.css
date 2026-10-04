@@ -1085,3 +1085,265 @@ a:hover {
   }
 }
 
+/* ==========================================================================
+   Modern Compact Filter Toolbar & Chips System
+   ========================================================================== */
+
+.browse-toolbar-wrapper {
+  margin-bottom: 24px;
+}
+
+.browse-toolbar {
+  background: rgba(14, 13, 20, 0.6);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px 14px;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.browse-type-tabs {
+  display: inline-flex;
+  background: #09080e;
+  border: 1px solid var(--line);
+  padding: 3px;
+  border-radius: 999px;
+  gap: 2px;
+}
+
+.type-tab-btn {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 14px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--muted);
+  border-radius: 999px;
+  transition: all 0.2s ease;
+  text-decoration: none;
+}
+
+.type-tab-btn:hover {
+  color: #FFFFFF;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.type-tab-btn.active {
+  color: #000000;
+  background: rgba(205, 175, 247, 1);
+  box-shadow: 0 2px 8px rgba(124, 58, 237, 0.3);
+}
+
+.filter-controls-group {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.filter-pill-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 14px;
+  background: #12111a;
+  border: 1px solid rgba(186, 166, 255, 0.18);
+  border-radius: 999px;
+  color: #E2D9F3;
+  font-size: 0.82rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.filter-pill-btn:hover {
+  background: #1b1926;
+  border-color: rgba(205, 175, 247, 0.45);
+  color: #FFFFFF;
+}
+
+.filter-pill-btn:focus,
+.filter-pill-btn.show {
+  background: #201d2d;
+  border-color: rgba(205, 175, 247, 0.7);
+  color: #FFFFFF;
+  box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.25);
+}
+
+.filter-pill-active {
+  background: rgba(124, 58, 237, 0.22) !important;
+  border-color: rgba(205, 175, 247, 0.6) !important;
+  color: rgba(205, 175, 247, 1) !important;
+  font-weight: 600;
+}
+
+.active-filter-count-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: rgba(205, 175, 247, 1);
+  color: #000000;
+  font-size: 0.68rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.filter-dropdown-menu {
+  background: rgba(12, 11, 18, 0.98) !important;
+  border: 1px solid var(--line) !important;
+  border-radius: 10px !important;
+  padding: 6px !important;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.8) !important;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  z-index: 1040;
+}
+
+.filter-dropdown-menu.scrollable-dropdown {
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.filter-dropdown-menu .dropdown-item {
+  color: #DDD !important;
+  font-size: 0.82rem;
+  font-weight: 500;
+  padding: 7px 12px;
+  border-radius: 6px;
+  transition: all 0.15s ease;
+}
+
+.filter-dropdown-menu .dropdown-item:hover {
+  background: rgba(124, 58, 237, 0.2) !important;
+  color: rgba(205, 175, 247, 1) !important;
+}
+
+.filter-dropdown-menu .dropdown-item.active {
+  background: rgba(124, 58, 237, 0.35) !important;
+  color: #FFFFFF !important;
+  font-weight: 600;
+}
+
+.active-filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 8px;
+}
+
+.filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px 4px 12px;
+  background: rgba(124, 58, 237, 0.18);
+  border: 1px solid rgba(205, 175, 247, 0.3);
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: #FFFFFF;
+  transition: all 0.15s ease;
+}
+
+.filter-chip:hover {
+  background: rgba(124, 58, 237, 0.28);
+  border-color: rgba(205, 175, 247, 0.5);
+}
+
+.filter-chip-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  color: rgba(205, 175, 247, 0.75);
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  border-radius: 50%;
+  transition: color 0.15s ease, transform 0.15s ease;
+}
+
+.filter-chip-remove:hover {
+  color: #FFFFFF;
+  transform: scale(1.15);
+}
+
+.filter-chip-clear-all {
+  font-size: 0.76rem;
+  color: var(--muted) !important;
+  transition: color 0.2s ease;
+}
+
+.filter-chip-clear-all:hover {
+  color: rgba(205, 175, 247, 1) !important;
+  text-decoration: underline !important;
+}
+
+.compact-filter-drawer {
+  background: rgba(14, 13, 20, 0.95);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+.custom-drawer-select {
+  background-color: #09080e !important;
+  color: #FFFFFF !important;
+  border: 1px solid var(--line) !important;
+  border-radius: 8px !important;
+  font-size: 0.85rem !important;
+  padding: 8px 12px !important;
+  box-shadow: none !important;
+}
+
+.custom-drawer-select:focus {
+  border-color: rgba(205, 175, 247, 0.7) !important;
+  background-color: #111018 !important;
+}
+
+.custom-filter-dropdown .dropdown-toggle::after {
+  margin-left: 4px;
+  vertical-align: 0.15em;
+  opacity: 0.7;
+}
+
+@media (max-width: 576px) {
+  .browse-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+  
+  .browse-type-tabs {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .type-tab-btn {
+    flex: 1;
+    justify-content: center;
+  }
+
+  .filter-controls-group {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .filter-toggle-main-btn {
+    flex: 1;
+  }
+}
+
+

@@ -229,8 +229,13 @@ app.use(async (req, res, next) => {
     }
     next();
 });
-app.get('/', async (req, res)=> {
+app.get(['/', '/browse'], async (req, res)=> {
     try {
+        if (req.query.type === 'series') {
+            const queryParams = new URLSearchParams(req.query);
+            queryParams.delete('type');
+            return res.redirect('/series' + (queryParams.toString() ? '?' + queryParams.toString() : ''));
+        }
         const search = req.query.q ? req.query.q.trim() : '';
         const genre = req.query.genre || '';
         const year = req.query.year || '';

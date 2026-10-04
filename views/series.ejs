@@ -145,85 +145,251 @@
         </section>
       <% } %>
 
+      <%
+        const tvGenres = {
+          '10759': 'Action & Adventure',
+          '16': 'Animation',
+          '35': 'Comedy',
+          '80': 'Crime',
+          '99': 'Documentary',
+          '18': 'Drama',
+          '10751': 'Family',
+          '10762': 'Kids',
+          '9648': 'Mystery',
+          '10763': 'News',
+          '10764': 'Reality',
+          '10765': 'Sci-Fi & Fantasy',
+          '10766': 'Soap',
+          '10767': 'Talk',
+          '10768': 'War & Politics',
+          '37': 'Western'
+        };
+        const genreMap = tvGenres;
+        const activeGenreLabel = selectedGenre ? genreMap[selectedGenre] : '';
+        const sortLabels = {
+          'popularity.desc': 'Most Popular',
+          'vote_average.desc': 'Highest Rated',
+          'first_air_date.desc': 'Latest Release'
+        };
+        const activeSortLabel = selectedSort ? (sortLabels[selectedSort] || 'Popularity') : 'Popularity';
+        const activeFilterCount = (selectedGenre ? 1 : 0) + (selectedYear ? 1 : 0) + (selectedSort && selectedSort !== 'popularity.desc' ? 1 : 0);
+      %>
+
       <section class="section-header">
         <div>
           <div class="eyebrow">Wysteria Library</div>
           <h1 class="page-title"><%= pageTitle || 'Browse TV Series' %></h1>
           <p class="page-subtitle"><%= pageSubtitle || 'Track shows, write thoughts, and stream episodes.' %></p>
         </div>
-        <div>
-          <button class="btn btn-outline-warning btn-sm d-flex align-items-center gap-2" type="button" data-bs-toggle="collapse" data-bs-target="#filter-panel-collapse" aria-expanded="<%= (selectedGenre || selectedYear || searchQuery || showFilters) ? 'true' : 'false' %>">
-            <i class="bi bi-funnel"></i>
-            <span>Filters</span>
-            <% if (selectedGenre || selectedYear || searchQuery || (selectedSort && selectedSort !== 'popularity.desc')) { %>
-              <span class="badge bg-warning text-dark rounded-pill ms-1" style="font-size: 0.65rem;">Active</span>
-            <% } %>
-          </button>
-        </div>
       </section>
 
-      <!-- Advanced Filter Panel -->
-      <div class="collapse <%= (selectedGenre || selectedYear || searchQuery || showFilters) ? 'show' : '' %>" id="filter-panel-collapse">
-        <div class="filter-panel mb-5 p-4 rounded-3" style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.05); backdrop-filter: blur(10px);">
-          <form action="/series" method="GET" class="row g-3 align-items-end">
-            <div class="col-12 col-md-4 col-lg-3">
-              <label class="form-label text-muted fw-bold small uppercase-label" style="font-size: 0.75rem; letter-spacing: 1px;">Search</label>
-              <div class="input-group">
-                <span class="input-group-text bg-dark border-secondary text-muted"><i class="bi bi-search"></i></span>
-                <input type="text" name="q" value="<%= searchQuery || '' %>" class="form-control bg-dark text-light border-secondary" placeholder="Search series...">
+      <!-- Compact Modern Filter Toolbar -->
+      <div class="browse-toolbar-wrapper">
+        <div class="browse-toolbar d-flex flex-wrap align-items-center justify-content-between gap-3">
+          <!-- Type Selector Tabs -->
+          <div class="browse-type-tabs">
+            <a href="/<%= searchQuery ? '?q=' + encodeURIComponent(searchQuery) : '' %>" class="type-tab-btn">
+              <i class="bi bi-film me-1"></i> Movies
+            </a>
+            <a href="/series<%= searchQuery ? '?q=' + encodeURIComponent(searchQuery) : '' %>" class="type-tab-btn active">
+              <i class="bi bi-tv me-1"></i> Series
+            </a>
+          </div>
+
+          <!-- Filter Controls Group -->
+          <div class="filter-controls-group">
+            <!-- Desktop Quick Dropdowns -->
+            <div class="d-none d-md-flex align-items-center gap-2">
+              <!-- Genre Dropdown -->
+              <div class="dropdown custom-filter-dropdown">
+                <button class="btn filter-pill-btn dropdown-toggle <%= selectedGenre ? 'filter-pill-active' : '' %>" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="Filter by Genre">
+                  <i class="bi bi-tags"></i>
+                  <span><%= activeGenreLabel || 'Genre' %></span>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-dark filter-dropdown-menu scrollable-dropdown">
+                  <li><a class="dropdown-item <%= !selectedGenre ? 'active' : '' %>" href="javascript:void(0)" onclick="updateFilter('genre', '')">All Genres</a></li>
+                  <li><hr class="dropdown-divider border-secondary border-opacity-25"></li>
+                  <% for (const [gId, gName] of Object.entries(genreMap)) { %>
+                    <li>
+                      <a class="dropdown-item <%= selectedGenre === gId ? 'active' : '' %>" href="javascript:void(0)" onclick="updateFilter('genre', '<%= gId %>')">
+                        <%= gName %>
+                      </a>
+                    </li>
+                  <% } %>
+                </ul>
+              </div>
+
+              <!-- Year Dropdown -->
+              <div class="dropdown custom-filter-dropdown">
+                <button class="btn filter-pill-btn dropdown-toggle <%= selectedYear ? 'filter-pill-active' : '' %>" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="Filter by Year">
+                  <i class="bi bi-calendar3"></i>
+                  <span><%= selectedYear || 'Year' %></span>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-dark filter-dropdown-menu scrollable-dropdown">
+                  <li><a class="dropdown-item <%= !selectedYear ? 'active' : '' %>" href="javascript:void(0)" onclick="updateFilter('year', '')">All Years</a></li>
+                  <li><hr class="dropdown-divider border-secondary border-opacity-25"></li>
+                  <% const currentYear = new Date().getFullYear(); %>
+                  <% for (let y = currentYear; y >= 2000; y--) { %>
+                    <li>
+                      <a class="dropdown-item <%= selectedYear === String(y) ? 'active' : '' %>" href="javascript:void(0)" onclick="updateFilter('year', '<%= y %>')">
+                        <%= y %>
+                      </a>
+                    </li>
+                  <% } %>
+                </ul>
+              </div>
+
+              <!-- Sort Dropdown -->
+              <div class="dropdown custom-filter-dropdown">
+                <button class="btn filter-pill-btn dropdown-toggle <%= (selectedSort && selectedSort !== 'popularity.desc') ? 'filter-pill-active' : '' %>" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="Sort Results">
+                  <i class="bi bi-arrow-down-up"></i>
+                  <span><%= activeSortLabel || 'Sort' %></span>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-dark filter-dropdown-menu">
+                  <li>
+                    <a class="dropdown-item <%= (!selectedSort || selectedSort === 'popularity.desc') ? 'active' : '' %>" href="javascript:void(0)" onclick="updateFilter('sort', 'popularity.desc')">
+                      Most Popular
+                    </a>
+                  </li>
+                  <li>
+                    <a class="dropdown-item <%= selectedSort === 'vote_average.desc' ? 'active' : '' %>" href="javascript:void(0)" onclick="updateFilter('sort', 'vote_average.desc')">
+                      Highest Rated
+                    </a>
+                  </li>
+                  <li>
+                    <a class="dropdown-item <%= (selectedSort === 'first_air_date.desc' || selectedSort === 'release_date.desc') ? 'active' : '' %>" href="javascript:void(0)" onclick="updateFilter('sort', 'first_air_date.desc')">
+                      Latest Release
+                    </a>
+                  </li>
+                </ul>
               </div>
             </div>
-            
-            <div class="col-6 col-md-3 col-lg-3">
-              <label class="form-label text-muted fw-bold small uppercase-label" style="font-size: 0.75rem; letter-spacing: 1px;">Genres</label>
-              <select name="genre" class="form-select bg-dark text-light border-secondary" onchange="this.form.submit()">
-                <option value="">Any</option>
-                <option value="10759" <%= selectedGenre === '10759' ? 'selected' : '' %>>Action & Adventure</option>
-                <option value="16" <%= selectedGenre === '16' ? 'selected' : '' %>>Animation</option>
-                <option value="35" <%= selectedGenre === '35' ? 'selected' : '' %>>Comedy</option>
-                <option value="80" <%= selectedGenre === '80' ? 'selected' : '' %>>Crime</option>
-                <option value="99" <%= selectedGenre === '99' ? 'selected' : '' %>>Documentary</option>
-                <option value="18" <%= selectedGenre === '18' ? 'selected' : '' %>>Drama</option>
-                <option value="10751" <%= selectedGenre === '10751' ? 'selected' : '' %>>Family</option>
-                <option value="10762" <%= selectedGenre === '10762' ? 'selected' : '' %>>Kids</option>
-                <option value="9648" <%= selectedGenre === '9648' ? 'selected' : '' %>>Mystery</option>
-                <option value="10763" <%= selectedGenre === '10763' ? 'selected' : '' %>>News</option>
-                <option value="10764" <%= selectedGenre === '10764' ? 'selected' : '' %>>Reality</option>
-                <option value="10765" <%= selectedGenre === '10765' ? 'selected' : '' %>>Sci-Fi & Fantasy</option>
-                <option value="10766" <%= selectedGenre === '10766' ? 'selected' : '' %>>Soap</option>
-                <option value="10767" <%= selectedGenre === '10767' ? 'selected' : '' %>>Talk</option>
-                <option value="10768" <%= selectedGenre === '10768' ? 'selected' : '' %>>War & Politics</option>
-                <option value="37" <%= selectedGenre === '37' ? 'selected' : '' %>>Western</option>
+
+            <!-- Detailed Filters Toggle Button (Desktop & Mobile) -->
+            <button class="btn filter-pill-btn filter-toggle-main-btn <%= activeFilterCount > 0 ? 'filter-pill-active' : '' %>" type="button" data-bs-toggle="collapse" data-bs-target="#filter-panel-collapse" aria-expanded="<%= (selectedGenre || selectedYear || searchQuery || showFilters) ? 'true' : 'false' %>" title="Toggle detailed filter drawer">
+              <i class="bi bi-sliders"></i>
+              <span>Filters</span>
+              <% if (activeFilterCount > 0) { %>
+                <span class="active-filter-count-badge"><%= activeFilterCount %></span>
+              <% } %>
+            </button>
+
+            <!-- Reset Button -->
+            <% if (activeFilterCount > 0 || searchQuery) { %>
+              <button class="btn btn-link text-muted filter-chip-clear-all p-1 text-decoration-none" type="button" onclick="resetFilters()" title="Reset all filters">
+                <i class="bi bi-arrow-counterclockwise"></i> Reset
+              </button>
+            <% } %>
+          </div>
+        </div>
+
+        <!-- Active Filter Chips -->
+        <% if (activeFilterCount > 0 || searchQuery) { %>
+          <div class="active-filter-chips">
+            <span class="text-muted small me-1"><i class="bi bi-funnel-fill text-warning me-1"></i>Active:</span>
+
+            <% if (searchQuery) { %>
+              <span class="filter-chip">
+                <span>Search: "<%= searchQuery %>"</span>
+                <button type="button" class="filter-chip-remove" onclick="removeFilter('q')" aria-label="Remove search filter">
+                  <i class="bi bi-x"></i>
+                </button>
+              </span>
+            <% } %>
+
+            <% if (selectedGenre && activeGenreLabel) { %>
+              <span class="filter-chip">
+                <span>Genre: <%= activeGenreLabel %></span>
+                <button type="button" class="filter-chip-remove" onclick="removeFilter('genre')" aria-label="Remove genre filter">
+                  <i class="bi bi-x"></i>
+                </button>
+              </span>
+            <% } %>
+
+            <% if (selectedYear) { %>
+              <span class="filter-chip">
+                <span>Year: <%= selectedYear %></span>
+                <button type="button" class="filter-chip-remove" onclick="removeFilter('year')" aria-label="Remove year filter">
+                  <i class="bi bi-x"></i>
+                </button>
+              </span>
+            <% } %>
+
+            <% if (selectedSort && selectedSort !== 'popularity.desc') { %>
+              <span class="filter-chip">
+                <span>Sort: <%= activeSortLabel %></span>
+                <button type="button" class="filter-chip-remove" onclick="removeFilter('sort')" aria-label="Remove sort filter">
+                  <i class="bi bi-x"></i>
+                </button>
+              </span>
+            <% } %>
+
+            <button type="button" class="btn btn-link filter-chip-clear-all p-0 ms-2" onclick="resetFilters()">
+              Clear all
+            </button>
+          </div>
+        <% } %>
+      </div>
+
+      <!-- Compact Collapsible Filter Drawer -->
+      <div class="collapse <%= showFilters ? 'show' : '' %>" id="filter-panel-collapse">
+        <div class="compact-filter-drawer mb-4 p-4">
+          <div class="d-flex align-items-center justify-content-between mb-3 pb-2 border-bottom border-secondary border-opacity-25">
+            <div class="d-flex align-items-center gap-2">
+              <i class="bi bi-sliders text-warning"></i>
+              <span class="fw-bold text-white fs-6">Filter Options</span>
+              <% if (activeFilterCount > 0) { %>
+                <span class="badge bg-warning text-dark rounded-pill" style="font-size: 0.68rem;"><%= activeFilterCount %> active</span>
+              <% } %>
+            </div>
+            <button type="button" class="btn-close btn-close-white small" data-bs-toggle="collapse" data-bs-target="#filter-panel-collapse" aria-label="Close filter panel"></button>
+          </div>
+
+          <form action="/series" method="GET" class="row g-3 align-items-end" id="filterDrawerForm">
+            <% if (searchQuery) { %>
+              <input type="hidden" name="q" value="<%= searchQuery %>">
+            <% } %>
+
+            <div class="col-12 col-sm-6 col-md-4">
+              <label class="form-label text-muted small fw-bold text-uppercase" style="font-size: 0.72rem; letter-spacing: 0.06em;">Genre</label>
+              <select name="genre" class="form-select custom-drawer-select">
+                <option value="">All Genres</option>
+                <% for (const [gId, gName] of Object.entries(genreMap)) { %>
+                  <option value="<%= gId %>" <%= selectedGenre === gId ? 'selected' : '' %>><%= gName %></option>
+                <% } %>
               </select>
             </div>
-            
-            <div class="col-6 col-md-2 col-lg-2">
-              <label class="form-label text-muted fw-bold small uppercase-label" style="font-size: 0.75rem; letter-spacing: 1px;">Year</label>
-              <select name="year" class="form-select bg-dark text-light border-secondary" onchange="this.form.submit()">
-                <option value="">Any</option>
-                <% const currentYear = new Date().getFullYear(); %>
-                <% for (let y = currentYear; y >= 2000; y--) { %>
+
+            <div class="col-6 col-sm-6 col-md-3">
+              <label class="form-label text-muted small fw-bold text-uppercase" style="font-size: 0.72rem; letter-spacing: 0.06em;">Release Year</label>
+              <select name="year" class="form-select custom-drawer-select">
+                <option value="">All Years</option>
+                <% const curYear = new Date().getFullYear(); %>
+                <% for (let y = curYear; y >= 2000; y--) { %>
                   <option value="<%= y %>" <%= selectedYear === String(y) ? 'selected' : '' %>><%= y %></option>
                 <% } %>
               </select>
             </div>
-            
-            <div class="col-12 col-md-3 col-lg-2">
-              <label class="form-label text-muted fw-bold small uppercase-label" style="font-size: 0.75rem; letter-spacing: 1px;">Sort</label>
-              <select name="sort" class="form-select bg-dark text-light border-secondary" onchange="this.form.submit()">
-                <option value="popularity.desc" <%= selectedSort === 'popularity.desc' ? 'selected' : '' %>>Popularity</option>
-                <option value="vote_average.desc" <%= selectedSort === 'vote_average.desc' ? 'selected' : '' %>>Rating</option>
-                <option value="first_air_date.desc" <%= selectedSort === 'first_air_date.desc' ? 'selected' : '' %>>Release Date</option>
+
+            <div class="col-6 col-sm-6 col-md-3">
+              <label class="form-label text-muted small fw-bold text-uppercase" style="font-size: 0.72rem; letter-spacing: 0.06em;">Sort By</label>
+              <select name="sort" class="form-select custom-drawer-select">
+                <option value="popularity.desc" <%= (!selectedSort || selectedSort === 'popularity.desc') ? 'selected' : '' %>>Most Popular</option>
+                <option value="vote_average.desc" <%= selectedSort === 'vote_average.desc' ? 'selected' : '' %>>Highest Rated</option>
+                <option value="first_air_date.desc" <%= (selectedSort === 'first_air_date.desc' || selectedSort === 'release_date.desc') ? 'selected' : '' %>>Latest Release</option>
               </select>
             </div>
 
-            <% if (selectedGenre || selectedYear || searchQuery || (selectedSort && selectedSort !== 'popularity.desc')) { %>
-              <div class="col-12 col-md-auto d-flex align-items-end">
-                <a href="/series" class="btn btn-outline-danger btn-sm w-100 py-2" style="font-size: 0.8rem;">
-                  <i class="bi bi-x-circle me-1"></i> Reset
-                </a>
-              </div>
-            <% } %>
+            <div class="col-12 col-sm-6 col-md-2 d-flex gap-2">
+              <button type="submit" class="btn btn-warning w-100 fw-bold py-2">
+                Apply
+              </button>
+              <% if (activeFilterCount > 0) { %>
+                <button type="button" class="btn btn-outline-secondary py-2" onclick="resetFilters()" title="Reset Filters">
+                  <i class="bi bi-arrow-counterclockwise"></i>
+                </button>
+              <% } %>
+            </div>
           </form>
         </div>
       </div>
@@ -280,11 +446,36 @@
   <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.min.js"></script>
   <script>
+    function updateFilter(key, value) {
+      const url = new URL(window.location.href);
+      if (value) {
+        url.searchParams.set(key, value);
+      } else {
+        url.searchParams.delete(key);
+      }
+      window.location.href = url.toString();
+    }
+
+    function removeFilter(key) {
+      const url = new URL(window.location.href);
+      url.searchParams.delete(key);
+      window.location.href = url.toString();
+    }
+
+    function resetFilters() {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('genre');
+      url.searchParams.delete('year');
+      url.searchParams.delete('sort');
+      url.searchParams.delete('showFilters');
+      window.location.href = url.toString();
+    }
+
     document.addEventListener('DOMContentLoaded', () => {
       const filterCollapse = document.getElementById('filter-panel-collapse');
       if (filterCollapse) {
         filterCollapse.addEventListener('shown.bs.collapse', () => {
-          filterCollapse.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          filterCollapse.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         });
 
         const navBtn = document.getElementById('navFilterToggleBtn');
@@ -292,7 +483,7 @@
           navBtn.addEventListener('click', () => {
             setTimeout(() => {
               if (filterCollapse.classList.contains('show')) {
-                filterCollapse.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                filterCollapse.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
               }
             }, 50);
           });
@@ -301,7 +492,7 @@
         const urlParams = new URLSearchParams(window.location.search);
         if (urlParams.get('showFilters') === 'true') {
           setTimeout(() => {
-            filterCollapse.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            filterCollapse.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
           }, 200);
         }
       }
