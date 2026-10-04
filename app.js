@@ -10,8 +10,33 @@ const Watchlist=require('./models/watchlist');
 const WatchProgress = require('./models/watchProgress');
 const { StreamingProviderManager } = require('./providers');
 const axios = require('axios');
+const https = require('https');
+const dns = require('dns');
 require('dotenv').config();
 const app = express();
+
+// Configure reliable public DNS servers (Cloudflare / Google) to prevent ISP DNS poisoning/timeouts
+dns.setServers(['1.1.1.1', '8.8.8.8', '1.0.0.1']);
+const customDnsLookup = (hostname, options, callback) => {
+    if (typeof options === 'function') {
+        callback = options;
+        options = {};
+    }
+    dns.resolve4(hostname, (err, addresses) => {
+        if (!err && addresses && addresses.length > 0) {
+            if (options && options.all) {
+                return callback(null, addresses.map(addr => ({ address: addr, family: 4 })));
+            }
+            return callback(null, addresses[0], 4);
+        }
+        dns.lookup(hostname, options, callback);
+    });
+};
+
+const tmdbHttpsAgent = new https.Agent({
+    lookup: customDnsLookup,
+    keepAlive: true
+});
 
 const {loginschema,signupschema}=require('./models/validation');
 const watchlist = require('./models/watchlist');
@@ -54,7 +79,9 @@ async function fetchTmdbCached(url, params = {}, ttlMs = 1000 * 60 * 15) {
         params: {
             ...tmdbParams(),
             ...params
-        }
+        },
+        httpsAgent: tmdbHttpsAgent,
+        timeout: 10000
     });
 
     if (tmdbCache.size >= MAX_TMDB_CACHE_ENTRIES) {
