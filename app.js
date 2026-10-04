@@ -231,7 +231,7 @@ app.use(async (req, res, next) => {
 });
 app.get('/', async (req, res)=> {
     try {
-        const search = req.query.q;
+        const search = req.query.q ? req.query.q.trim() : '';
         const genre = req.query.genre || '';
         const year = req.query.year || '';
         const sort = req.query.sort || 'popularity.desc';
@@ -247,6 +247,15 @@ app.get('/', async (req, res)=> {
                 primary_release_year: year || undefined
             }, 1000 * 60 * 15);
             allMovies = data.results || [];
+            if (genre) {
+                const genreId = Number(genre);
+                allMovies = allMovies.filter(m => m.genre_ids && m.genre_ids.includes(genreId));
+            }
+            if (sort === 'vote_average.desc') {
+                allMovies.sort((a, b) => (b.vote_average || 0) - (a.vote_average || 0));
+            } else if (sort === 'release_date.desc') {
+                allMovies.sort((a, b) => new Date(b.release_date || 0) - new Date(a.release_date || 0));
+            }
             await addReviewStats(allMovies);
             pageTitle = 'Search results for "' + search + '"';
             pageSubtitle = allMovies.length + ' movies found';
@@ -547,7 +556,7 @@ app.get('/logout',(req,res)=>{
 })
 app.get('/series', isloggedin, async (req, res)=> {
     try {
-        const search = req.query.q;
+        const search = req.query.q ? req.query.q.trim() : '';
         const genre = req.query.genre || '';
         const year = req.query.year || '';
         const sort = req.query.sort || 'popularity.desc';
@@ -563,6 +572,15 @@ app.get('/series', isloggedin, async (req, res)=> {
                 first_air_date_year: year || undefined
             }, 1000 * 60 * 15);
             allSeries = data.results || [];
+            if (genre) {
+                const genreId = Number(genre);
+                allSeries = allSeries.filter(s => s.genre_ids && s.genre_ids.includes(genreId));
+            }
+            if (sort === 'vote_average.desc') {
+                allSeries.sort((a, b) => (b.vote_average || 0) - (a.vote_average || 0));
+            } else if (sort === 'first_air_date.desc') {
+                allSeries.sort((a, b) => new Date(b.first_air_date || 0) - new Date(a.first_air_date || 0));
+            }
             await addReviewStats(allSeries, 'tv');
             pageTitle = 'Search results for "' + search + '"';
             pageSubtitle = allSeries.length + ' TV shows found';

@@ -199,7 +199,7 @@
               </select>
             </div>
             
-            <div class="col-12 col-md-3 col-lg-3">
+            <div class="col-12 col-md-3 col-lg-2">
               <label class="form-label text-muted fw-bold small uppercase-label" style="font-size: 0.75rem; letter-spacing: 1px;">Sort</label>
               <select name="sort" class="form-select bg-dark text-light border-secondary" onchange="this.form.submit()">
                 <option value="popularity.desc" <%= selectedSort === 'popularity.desc' ? 'selected' : '' %>>Popularity</option>
@@ -207,6 +207,14 @@
                 <option value="release_date.desc" <%= selectedSort === 'release_date.desc' ? 'selected' : '' %>>Release Date</option>
               </select>
             </div>
+
+            <% if (selectedGenre || selectedYear || searchQuery || (selectedSort && selectedSort !== 'popularity.desc')) { %>
+              <div class="col-12 col-md-auto d-flex align-items-end">
+                <a href="/" class="btn btn-outline-danger btn-sm w-100 py-2" style="font-size: 0.8rem;">
+                  <i class="bi bi-x-circle me-1"></i> Reset
+                </a>
+              </div>
+            <% } %>
           </form>
         </div>
       </div>
