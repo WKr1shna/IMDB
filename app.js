@@ -27,6 +27,49 @@ const tmdbParams = () => ({
     api_key: process.env.TMDB_API_KEY
 });
 
+// In-memory TMDB Cache (TTL-based with LRU capacity capping)
+const tmdbCache = new Map();
+const MAX_TMDB_CACHE_ENTRIES = 500;
+
+function getTmdbCacheKey(url, params = {}) {
+    const cleanParams = Object.keys(params)
+        .filter(k => k !== 'api_key' && params[k] !== undefined && params[k] !== null && params[k] !== '')
+        .sort()
+        .reduce((acc, k) => {
+            acc[k] = params[k];
+            return acc;
+        }, {});
+    return `${url}?${JSON.stringify(cleanParams)}`;
+}
+
+async function fetchTmdbCached(url, params = {}, ttlMs = 1000 * 60 * 15) {
+    const key = getTmdbCacheKey(url, params);
+    const now = Date.now();
+    const cached = tmdbCache.get(key);
+    if (cached && cached.expiresAt > now) {
+        return cached.data;
+    }
+
+    const response = await axios.get(url, {
+        params: {
+            ...tmdbParams(),
+            ...params
+        }
+    });
+
+    if (tmdbCache.size >= MAX_TMDB_CACHE_ENTRIES) {
+        const firstKey = tmdbCache.keys().next().value;
+        tmdbCache.delete(firstKey);
+    }
+
+    tmdbCache.set(key, {
+        data: response.data,
+        expiresAt: now + ttlMs
+    });
+
+    return response.data;
+}
+
 function shuffleMovies(movies) {
     return movies
         .map(movie => ({ movie, sort: Math.random() }))
@@ -38,7 +81,7 @@ async function addReviewStats(items, mediaType = 'movie') {
     if (!items || items.length === 0) return items;
     const ids = items.map(item => Number(item.id));
     try {
-        const reviews = await Review.find({ tmdbId: { $in: ids }, mediaType: mediaType });
+        const reviews = await Review.find({ tmdbId: { $in: ids }, mediaType: mediaType }).select('tmdbId rating').lean();
         const reviewsMap = {};
         reviews.forEach(review => {
             if (!reviewsMap[review.tmdbId]) {
@@ -67,32 +110,22 @@ async function getRandomRelevantMovies() {
     const randomPage = Math.floor(Math.random() * 8) + 1;
     const randomYear = Math.floor(Math.random() * 45) + 1980;
     const discoveryRequests = [
-        axios.get('https://api.themoviedb.org/3/movie/top_rated', {
-            params: {
-                ...tmdbParams(),
-                page: randomPage
-            }
-        }),
-        axios.get('https://api.themoviedb.org/3/trending/movie/week', {
-            params: tmdbParams()
-        }),
-        axios.get('https://api.themoviedb.org/3/discover/movie', {
-            params: {
-                ...tmdbParams(),
-                sort_by: 'popularity.desc',
-                'vote_count.gte': 500,
-                primary_release_year: randomYear,
-                page: 1
-            }
-        })
+        fetchTmdbCached('https://api.themoviedb.org/3/movie/top_rated', { page: randomPage }, 1000 * 60 * 30),
+        fetchTmdbCached('https://api.themoviedb.org/3/trending/movie/week', {}, 1000 * 60 * 30),
+        fetchTmdbCached('https://api.themoviedb.org/3/discover/movie', {
+            sort_by: 'popularity.desc',
+            'vote_count.gte': 500,
+            primary_release_year: randomYear,
+            page: 1
+        }, 1000 * 60 * 30)
     ];
 
     const responses = await Promise.all(discoveryRequests);
     const moviesById = new Map();
 
-    responses.forEach(response => {
-        if (response.data && response.data.results) {
-            response.data.results.forEach(movie => {
+    responses.forEach(data => {
+        if (data && data.results) {
+            data.results.forEach(movie => {
                 if (movie.poster_path && !moviesById.has(movie.id)) {
                     moviesById.set(movie.id, movie);
                 }
@@ -106,31 +139,21 @@ async function getRandomRelevantMovies() {
 async function getRandomRelevantSeries() {
     const randomPage = Math.floor(Math.random() * 8) + 1;
     const discoveryRequests = [
-        axios.get('https://api.themoviedb.org/3/tv/top_rated', {
-            params: {
-                ...tmdbParams(),
-                page: randomPage
-            }
-        }),
-        axios.get('https://api.themoviedb.org/3/trending/tv/week', {
-            params: tmdbParams()
-        }),
-        axios.get('https://api.themoviedb.org/3/discover/tv', {
-            params: {
-                ...tmdbParams(),
-                sort_by: 'popularity.desc',
-                'vote_count.gte': 100,
-                page: 1
-            }
-        })
+        fetchTmdbCached('https://api.themoviedb.org/3/tv/top_rated', { page: randomPage }, 1000 * 60 * 30),
+        fetchTmdbCached('https://api.themoviedb.org/3/trending/tv/week', {}, 1000 * 60 * 30),
+        fetchTmdbCached('https://api.themoviedb.org/3/discover/tv', {
+            sort_by: 'popularity.desc',
+            'vote_count.gte': 100,
+            page: 1
+        }, 1000 * 60 * 30)
     ];
 
     const responses = await Promise.all(discoveryRequests);
     const seriesById = new Map();
 
-    responses.forEach(response => {
-        if (response.data && response.data.results) {
-            response.data.results.forEach(series => {
+    responses.forEach(data => {
+        if (data && data.results) {
+            data.results.forEach(series => {
                 if (series.poster_path && !seriesById.has(series.id)) {
                     seriesById.set(series.id, series);
                 }
@@ -174,7 +197,7 @@ app.use(async (req, res, next) => {
     if(req.session.userId){
         const user = await User.findById(
             req.session.userId
-        );
+        ).select('username displayName email').lean();
         res.locals.currentUser = user;
     }
     next();
@@ -192,42 +215,27 @@ app.get('/', async (req, res)=> {
         let pageSubtitle = 'Rate films, read quick reactions, and find your next watch.';
 
         if (search) {
-            const response = await axios.get(
-                'https://api.themoviedb.org/3/search/movie', {
-                params: {
-                    api_key: process.env.TMDB_API_KEY,
-                    query: search,
-                    primary_release_year: year || undefined
-                }
-            });
-            allMovies = response.data.results || [];
+            const data = await fetchTmdbCached('https://api.themoviedb.org/3/search/movie', {
+                query: search,
+                primary_release_year: year || undefined
+            }, 1000 * 60 * 15);
+            allMovies = data.results || [];
             await addReviewStats(allMovies);
             pageTitle = 'Search results for "' + search + '"';
             pageSubtitle = allMovies.length + ' movies found';
         } else if (genre || year || sort !== 'popularity.desc') {
-            const response = await axios.get(
-                'https://api.themoviedb.org/3/discover/movie', {
-                params: {
-                    api_key: process.env.TMDB_API_KEY,
-                    with_genres: genre || undefined,
-                    primary_release_year: year || undefined,
-                    sort_by: sort
-                }
-            });
-            allMovies = response.data.results || [];
+            const data = await fetchTmdbCached('https://api.themoviedb.org/3/discover/movie', {
+                with_genres: genre || undefined,
+                primary_release_year: year || undefined,
+                sort_by: sort
+            }, 1000 * 60 * 20);
+            allMovies = data.results || [];
             await addReviewStats(allMovies);
             pageTitle = 'Filtered Movies';
             pageSubtitle = allMovies.length + ' movies matched your criteria';
         } else {
-            const response = await axios.get(
-                'https://api.themoviedb.org/3/movie/popular',
-                {
-                    params: {
-                        api_key: process.env.TMDB_API_KEY
-                    }
-                }
-            );
-            allMovies = response.data.results || [];
+            const data = await fetchTmdbCached('https://api.themoviedb.org/3/movie/popular', {}, 1000 * 60 * 30);
+            allMovies = data.results || [];
             await addReviewStats(allMovies);
             randomMovies = await getRandomRelevantMovies();
         }
@@ -346,26 +354,21 @@ function isloggedin(req,res,next){
 }
 app.get('/movie/:id',isloggedin,async(req,res)=>{
     try{
-        const response=await axios.get(`https://api.themoviedb.org/3/movie/${req.params.id}`,{
-            params:{
-                api_key:process.env.TMDB_API_KEY
-            }
-    })
-    const watchlistMovie= await Watchlist.findOne({
-        userId:req.session.userId,
-        tmdbId:Number(req.params.id),
-        mediaType:'movie'
-    })
-        const movie=response.data;
+        const movie = await fetchTmdbCached(`https://api.themoviedb.org/3/movie/${req.params.id}`, {}, 1000 * 60 * 60);
+        const watchlistMovie= await Watchlist.findOne({
+            userId:req.session.userId,
+            tmdbId:Number(req.params.id),
+            mediaType:'movie'
+        }).lean();
         const reviews=await Review.find({
             tmdbId:Number(req.params.id),
             mediaType:'movie'
-        }).populate('userId');
+        }).populate('userId').lean();
         const userReview = await Review.findOne({
             userId: req.session.userId,
             tmdbId: Number(req.params.id),
             mediaType:'movie'
-        });
+        }).lean();
         res.render('show',{
             movie,
             reviews,
@@ -468,10 +471,8 @@ app.post('/watchlist/remove/:id',isloggedin,async(req,res)=>{
 })
 app.get('/trending',async (req,res)=>{
     try{
-        const response=await axios.get('https://api.themoviedb.org/3/trending/movie/week',{
-            params:{api_key:process.env.TMDB_API_KEY}
-        });
-        const allMovies=response.data.results;
+        const data = await fetchTmdbCached('https://api.themoviedb.org/3/trending/movie/week', {}, 1000 * 60 * 30);
+        const allMovies=data.results || [];
 
         await addReviewStats(allMovies, 'movie');
         res.render('index',{
@@ -493,8 +494,7 @@ app.get('/login', (req, res) => {
 });
 app.get('/watch/:id',isloggedin,async (req,res)=>{
     try{
-        const response=await axios.get(`https://api.themoviedb.org/3/movie/${req.params.id}`,{params:{api_key:process.env.TMDB_API_KEY}})
-        const movie=response.data;
+        const movie = await fetchTmdbCached(`https://api.themoviedb.org/3/movie/${req.params.id}`, {}, 1000 * 60 * 60);
         const providers = StreamingProviderManager.getProviders(movie.id, 'movie');
         res.render('watch',{movie, providers});
     }
@@ -527,42 +527,27 @@ app.get('/series', isloggedin, async (req, res)=> {
         let pageSubtitle = 'Track shows, write thoughts, and stream episodes.';
 
         if (search) {
-            const response = await axios.get(
-                'https://api.themoviedb.org/3/search/tv', {
-                params: {
-                    api_key: process.env.TMDB_API_KEY,
-                    query: search,
-                    first_air_date_year: year || undefined
-                }
-            });
-            allSeries = response.data.results || [];
+            const data = await fetchTmdbCached('https://api.themoviedb.org/3/search/tv', {
+                query: search,
+                first_air_date_year: year || undefined
+            }, 1000 * 60 * 15);
+            allSeries = data.results || [];
             await addReviewStats(allSeries, 'tv');
             pageTitle = 'Search results for "' + search + '"';
             pageSubtitle = allSeries.length + ' TV shows found';
         } else if (genre || year || sort !== 'popularity.desc') {
-            const response = await axios.get(
-                'https://api.themoviedb.org/3/discover/tv', {
-                params: {
-                    api_key: process.env.TMDB_API_KEY,
-                    with_genres: genre || undefined,
-                    first_air_date_year: year || undefined,
-                    sort_by: sort
-                }
-            });
-            allSeries = response.data.results || [];
+            const data = await fetchTmdbCached('https://api.themoviedb.org/3/discover/tv', {
+                with_genres: genre || undefined,
+                first_air_date_year: year || undefined,
+                sort_by: sort
+            }, 1000 * 60 * 20);
+            allSeries = data.results || [];
             await addReviewStats(allSeries, 'tv');
             pageTitle = 'Filtered TV Series';
             pageSubtitle = allSeries.length + ' TV shows matched your criteria';
         } else {
-            const response = await axios.get(
-                'https://api.themoviedb.org/3/tv/popular',
-                {
-                    params: {
-                        api_key: process.env.TMDB_API_KEY
-                    }
-                }
-            );
-            allSeries = response.data.results || [];
+            const data = await fetchTmdbCached('https://api.themoviedb.org/3/tv/popular', {}, 1000 * 60 * 30);
+            allSeries = data.results || [];
             await addReviewStats(allSeries, 'tv');
             randomSeries = await getRandomRelevantSeries();
         }
@@ -585,26 +570,21 @@ app.get('/series', isloggedin, async (req, res)=> {
 
 app.get('/series/:id', isloggedin, async (req, res) => {
     try {
-        const response = await axios.get(`https://api.themoviedb.org/3/tv/${req.params.id}`, {
-            params: {
-                api_key: process.env.TMDB_API_KEY
-            }
-        });
+        const series = await fetchTmdbCached(`https://api.themoviedb.org/3/tv/${req.params.id}`, {}, 1000 * 60 * 60);
         const watchlistMovie = await Watchlist.findOne({
             userId: req.session.userId,
             tmdbId: Number(req.params.id),
             mediaType: 'tv'
-        });
-        const series = response.data;
+        }).lean();
         const reviews = await Review.find({
             tmdbId: Number(req.params.id),
             mediaType: 'tv'
-        }).populate('userId');
+        }).populate('userId').lean();
         const userReview = await Review.findOne({
             userId: req.session.userId,
             tmdbId: Number(req.params.id),
             mediaType: 'tv'
-        });
+        }).lean();
         res.render('show_series', {
             series,
             reviews,
@@ -646,12 +626,7 @@ app.post('/series/:id/review', isloggedin, async (req, res) => {
 
 app.get('/watch-series/:id', isloggedin, async (req, res) => {
     try {
-        const response = await axios.get(`https://api.themoviedb.org/3/tv/${req.params.id}`, {
-            params: {
-                api_key: process.env.TMDB_API_KEY
-            }
-        });
-        const series = response.data;
+        const series = await fetchTmdbCached(`https://api.themoviedb.org/3/tv/${req.params.id}`, {}, 1000 * 60 * 60);
         const currentSeason = Number(req.query.season) || 1;
         const currentEpisode = Number(req.query.episode) || 1;
         const providers = StreamingProviderManager.getProviders(series.id, 'tv', currentSeason, currentEpisode);

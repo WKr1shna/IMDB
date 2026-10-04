@@ -63,26 +63,7 @@
 
 <body>
 <script>
-  window.streamResolutionPromises = {};
-  (function() {
-    const season = "<%= currentSeason %>";
-    const episode = "<%= currentEpisode %>";
-    const title = "<%= series.name %>";
-    const releaseDate = "<%= series.first_air_date || '' %>";
-    const year = releaseDate ? releaseDate.split("-")[0] : "";
-    const tmdbId = "<%= series.id %>";
-    const mediaType = "tv";
-    const providers = <%- JSON.stringify(providers) %>;
-    
-    console.log("[Prefetch] Instantly initiating parallel pre-resolution for all providers...");
-    providers.forEach(p => {
-      window.streamResolutionPromises[p.name] = fetch(`/api/stream/resolve?provider=${p.name}&tmdbId=${tmdbId}&mediaType=${mediaType}&season=${season}&episode=${episode}&title=${encodeURIComponent(title)}&year=${year}`)
-        .then(res => {
-          if (!res.ok) throw new Error("Resolution failed");
-          return res.json();
-        });
-    });
-  })();
+  window.resolvedStreams = {};
 </script>
   <%- include('./navbar.ejs') %>
 
@@ -269,8 +250,8 @@
             this.startFailoverTimer();
 
             try {
-              let promise = window.streamResolutionPromises && window.streamResolutionPromises[provider.name];
-              if (!promise) {
+              let data = window.resolvedStreams && window.resolvedStreams[provider.name];
+              if (!data) {
                 const season = "<%= currentSeason %>";
                 const episode = "<%= currentEpisode %>";
                 const title = "<%= series.name %>";
@@ -278,14 +259,12 @@
                 const year = releaseDate ? releaseDate.split("-")[0] : "";
                 const tmdbId = "<%= series.id %>";
                 const mediaType = "tv";
-                promise = fetch(`/api/stream/resolve?provider=${provider.name}&tmdbId=${tmdbId}&mediaType=${mediaType}&season=${season}&episode=${episode}&title=${encodeURIComponent(title)}&year=${year}`)
-                  .then(res => {
-                    if (!res.ok) throw new Error("Resolution failed");
-                    return res.json();
-                  });
+                const res = await fetch(`/api/stream/resolve?provider=${provider.name}&tmdbId=${tmdbId}&mediaType=${mediaType}&season=${season}&episode=${episode}&title=${encodeURIComponent(title)}&year=${year}`);
+                if (!res.ok) throw new Error("Resolution failed");
+                data = await res.json();
+                window.resolvedStreams[provider.name] = data;
               }
 
-              const data = await promise;
               this.logPerf("resolutionCompleted", provider.name);
               this.playbackStatus.classList.add("d-none");
 
@@ -453,6 +432,7 @@
               this.saveProgressToServer(this.videoEl.currentTime, this.videoEl.duration);
             });
 
+            let lastIframeProgressSaved = 0;
             window.addEventListener("message", (event) => {
               try {
                 const payload = JSON.parse(event.data);
@@ -468,8 +448,14 @@
                       window.lastSavedProgressTime = currentTime;
                     }
                   }
-                  if (playerEvent === 'timeupdate' || playerEvent === 'pause' || playerEvent === 'ended') {
+                  if (playerEvent === 'pause' || playerEvent === 'ended') {
                     this.saveProgressToServer(currentTime, duration);
+                  } else if (playerEvent === 'timeupdate') {
+                    const now = Date.now();
+                    if (now - lastIframeProgressSaved > 10000) {
+                      lastIframeProgressSaved = now;
+                      this.saveProgressToServer(currentTime, duration);
+                    }
                   }
                 }
                 if (payload.event === 'progress' && payload.currentTime) {

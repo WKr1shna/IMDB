@@ -38,9 +38,11 @@
               <div class="poster-frame">
                 <% if (item.posterPath) { %>
                   <img
-                    src="https://image.tmdb.org/t/p/w500<%= item.posterPath %>"
+                    src="https://image.tmdb.org/t/p/w342<%= item.posterPath %>"
                     class="movie-img"
                     alt="<%= item.title %> poster"
+                    loading="lazy"
+                    decoding="async"
                   >
                 <% } else { %>
                   <div class="poster-placeholder">

@@ -41,7 +41,7 @@
                 <div class="carousel-item <%= index === 0 ? 'active' : '' %>">
                   <div
                     class="featured-slide"
-                    style="background-image: url('https://image.tmdb.org/t/p/original<%= backdrop %>');"
+                    style="background-image: url('https://image.tmdb.org/t/p/w1280<%= backdrop %>');"
                   >
                     <div class="featured-slide-content">
                       <% if (series.poster_path) { %>
@@ -49,6 +49,10 @@
                           src="https://image.tmdb.org/t/p/w342<%= series.poster_path %>"
                           alt="<%= series.name %> poster"
                           class="featured-poster"
+                          width="150"
+                          height="225"
+                          decoding="async"
+                          <%= index === 0 ? 'fetchpriority="high"' : 'loading="lazy"' %>
                         >
                       <% } %>
 
@@ -104,9 +108,11 @@
                 <div class="poster-frame">
                   <% if (series.poster_path) { %>
                     <img
-                      src="https://image.tmdb.org/t/p/w500<%= series.poster_path %>"
+                      src="https://image.tmdb.org/t/p/w342<%= series.poster_path %>"
                       class="movie-img"
                       alt="<%= series.name %> poster"
+                      loading="lazy"
+                      decoding="async"
                     >
                   <% } else { %>
                     <div class="poster-placeholder">
@@ -218,9 +224,11 @@
             <div class="poster-frame">
               <% if (series.poster_path) { %>
                 <img
-                  src="https://image.tmdb.org/t/p/w500<%= series.poster_path %>"
+                  src="https://image.tmdb.org/t/p/w342<%= series.poster_path %>"
                   class="movie-img"
                   alt="<%= series.name %> poster"
+                  loading="lazy"
+                  decoding="async"
                 >
               <% } else { %>
                 <div class="poster-placeholder">

@@ -50,5 +50,6 @@ const watchProgressSchema = new mongoose.Schema({
 });
 
 watchProgressSchema.index({ userId: 1, tmdbId: 1, mediaType: 1 }, { unique: true });
+watchProgressSchema.index({ userId: 1, updatedAt: -1 });
 
 module.exports = mongoose.model('WatchProgress', watchProgressSchema);

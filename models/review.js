@@ -43,4 +43,6 @@
     { userId: 1, tmdbId: 1, mediaType: 1 },
     { unique: true }
 );
- module.exports = mongoose.model('Review', reviewSchema);
+reviewSchema.index({ tmdbId: 1, mediaType: 1 });
+
+module.exports = mongoose.model('Review', reviewSchema);

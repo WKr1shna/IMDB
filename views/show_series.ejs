@@ -87,6 +87,8 @@
                 src="https://image.tmdb.org/t/p/w500<%= series.poster_path %>"
                 class="detail-poster"
                 alt="<%= series.name %> poster"
+                fetchpriority="high"
+                decoding="async"
               >
             <% } else { %>
               <div class="poster-placeholder">
