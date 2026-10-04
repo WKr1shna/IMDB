@@ -321,18 +321,59 @@
 
           initializeHlsPlayer(streamUrl) {
             if (Hls.isSupported()) {
-              this.hlsInstance = new Hls();
+              if (this.hlsInstance) {
+                this.hlsInstance.destroy();
+              }
+              this.hlsInstance = new Hls({
+                startFragPrefetch: true,
+                enableWorker: true,
+                lowLatencyMode: false,
+                backBufferLength: 30,
+                maxBufferLength: 30,
+                maxMaxBufferLength: 60,
+                startLevel: -1,
+                capLevelToPlayerSize: true
+              });
+
               this.hlsInstance.on(Hls.Events.MANIFEST_LOADED, () => {
                 this.logPerf("firstManifestReceived");
               });
+
               this.hlsInstance.on(Hls.Events.FRAG_LOADED, () => {
                 if (!this.perfMetrics.firstSegmentReceived) {
                   this.logPerf("firstSegmentReceived");
                 }
               });
 
+              this.hlsInstance.on(Hls.Events.ERROR, (event, data) => {
+                if (data.fatal) {
+                  console.warn(`[HLS Error] ${data.type}: ${data.details}`);
+                  switch (data.type) {
+                    case Hls.ErrorTypes.NETWORK_ERROR:
+                      if (this.failoverTimer) {
+                        clearTimeout(this.failoverTimer);
+                        this.failoverTimer = null;
+                      }
+                      this.tryLoadProvider(this.currentIndex + 1);
+                      break;
+                    case Hls.ErrorTypes.MEDIA_ERROR:
+                      this.hlsInstance.recoverMediaError();
+                      break;
+                    default:
+                      if (this.failoverTimer) {
+                        clearTimeout(this.failoverTimer);
+                        this.failoverTimer = null;
+                      }
+                      this.hlsInstance.destroy();
+                      this.tryLoadProvider(this.currentIndex + 1);
+                      break;
+                  }
+                }
+              });
+
               this.hlsInstance.loadSource(streamUrl);
               this.hlsInstance.attachMedia(this.videoEl);
+
               this.hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
                 this.logPerf("playerInitialized");
                 if (window.lastSavedProgressTime > 10) {
@@ -352,14 +393,14 @@
                 this.videoEl.play()
                   .then(() => this.logPerf("playbackStarted"))
                   .catch(e => console.log("Autoplay blocked:", e));
-              });
+              }, { once: true });
             }
 
             this.videoEl.addEventListener("playing", () => {
               if (!this.perfMetrics.firstFrameRendered) {
                 this.logPerf("firstFrameRendered");
               }
-            });
+            }, { once: true });
           }
 
           loadSubtitlesAsync(tracks) {
@@ -384,12 +425,14 @@
 
           startFailoverTimer() {
             if (this.failoverTimer) clearTimeout(this.failoverTimer);
+            const isNative = this.providers[this.currentIndex] && this.providers[this.currentIndex].type === 'native';
+            const timeoutMs = isNative ? 4000 : 7000;
             this.failoverTimer = setTimeout(() => {
               if (!this.isPlaybackStarted) {
-                console.log(`[StreamingManager] Provider ${this.providers[this.currentIndex].name} timed out.`);
+                console.log(`[StreamingManager] Provider ${this.providers[this.currentIndex].name} timed out after ${timeoutMs}ms.`);
                 this.tryLoadProvider(this.currentIndex + 1);
               }
-            }, 15000);
+            }, timeoutMs);
           }
 
           initProgressListeners() {

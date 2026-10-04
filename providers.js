@@ -183,12 +183,12 @@ class TwoEmbed extends StreamingProvider {
     }
 }
 
-// Registry in fallback order
+// Registry in fallback order (Instant reliable provider first, followed by alternates)
 const PROVIDERS = [
-    new VidStream(),
-    new VidCloud(),
     new VidPlay(),
     new VidSrc(),
+    new VidStream(),
+    new VidCloud(),
     new TwoEmbed()
 ];
 

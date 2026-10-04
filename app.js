@@ -697,7 +697,9 @@ app.get('/continue-watching', isloggedin, async (req, res) => {
     }
 });
 
-const streamResolutionCache = {};
+const streamResolutionCache = new Map();
+const MAX_STREAM_CACHE_ENTRIES = 300;
+const STREAM_CACHE_TTL_MS = 1000 * 60 * 60 * 2; // 2 hours
 
 app.get('/api/stream/resolve', isloggedin, async (req, res) => {
     const { provider, tmdbId, mediaType, season, episode, title, year } = req.query;
@@ -706,9 +708,10 @@ app.get('/api/stream/resolve', isloggedin, async (req, res) => {
     }
 
     const cacheKey = `${provider}_${tmdbId}_${mediaType}_${season || 1}_${episode || 1}`;
-    if (streamResolutionCache[cacheKey]) {
-        console.log(`[Stream Resolver] Cache hit for key ${cacheKey}`);
-        return res.json(streamResolutionCache[cacheKey]);
+    const now = Date.now();
+    const cached = streamResolutionCache.get(cacheKey);
+    if (cached && cached.expiresAt > now) {
+        return res.json(cached.data);
     }
 
     try {
@@ -718,7 +721,6 @@ app.get('/api/stream/resolve', isloggedin, async (req, res) => {
             return res.status(404).json({ error: 'Streaming provider not found' });
         }
 
-        console.log(`[Stream Resolver] Resolving for provider ${targetProvider.providerName} (${mediaType} "${title}")...`);
         const result = await targetProvider.resolve({
             tmdbId,
             mediaType,
@@ -728,7 +730,16 @@ app.get('/api/stream/resolve', isloggedin, async (req, res) => {
             year
         });
 
-        streamResolutionCache[cacheKey] = result;
+        if (streamResolutionCache.size >= MAX_STREAM_CACHE_ENTRIES) {
+            const firstKey = streamResolutionCache.keys().next().value;
+            streamResolutionCache.delete(firstKey);
+        }
+
+        streamResolutionCache.set(cacheKey, {
+            data: result,
+            expiresAt: now + STREAM_CACHE_TTL_MS
+        });
+
         res.json(result);
     } catch (err) {
         console.error(`[Stream Resolver] Error resolving stream for ${provider}:`, err.message);
