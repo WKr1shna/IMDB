@@ -47,7 +47,7 @@ class VidStreamBase extends StreamingProvider {
         let resolvedId = tmdbToVidstreamIdCache.get(tmdbId);
         if (!resolvedId) {
             console.log(`[VidStream Base] Cache miss for ID mapping of TMDB ${tmdbId}. Searching...`);
-            const searchResponse = await axios.get(`http://localhost:4030/search?q=${encodeURIComponent(title)}`);
+            const searchResponse = await axios.get(`http://localhost:4030/search?q=${encodeURIComponent(title)}`, { timeout: 3500 });
             const searchData = searchResponse.data;
             if (!searchData || !searchData.items || searchData.items.length === 0) {
                 throw new Error('No search results found');
@@ -75,7 +75,7 @@ class VidStreamBase extends StreamingProvider {
         if (mediaType === 'movie') {
             episodeId = vidstreamMovieEpisodeIdCache.get(resolvedId);
             if (!episodeId) {
-                const detailsResponse = await axios.get(`http://localhost:4030/movie/${resolvedId}`);
+                const detailsResponse = await axios.get(`http://localhost:4030/movie/${resolvedId}`, { timeout: 3500 });
                 episodeId = detailsResponse.data.episodeId;
                 if (episodeId) {
                     vidstreamMovieEpisodeIdCache.set(resolvedId, episodeId);
@@ -87,7 +87,7 @@ class VidStreamBase extends StreamingProvider {
 
             let seasons = vidstreamShowSeasonsCache.get(resolvedId);
             if (!seasons) {
-                const seasonsResponse = await axios.get(`http://localhost:4030/movie/${resolvedId}/seasons`);
+                const seasonsResponse = await axios.get(`http://localhost:4030/movie/${resolvedId}/seasons`, { timeout: 3500 });
                 seasons = seasonsResponse.data.seasons;
                 if (seasons && seasons.length > 0) {
                     vidstreamShowSeasonsCache.set(resolvedId, seasons);
@@ -98,7 +98,7 @@ class VidStreamBase extends StreamingProvider {
 
             let episodes = vidstreamSeasonEpisodesCache.get(seasonId);
             if (!episodes) {
-                const episodesResponse = await axios.get(`http://localhost:4030/movie/${resolvedId}/episodes?seasonId=${seasonId}`);
+                const episodesResponse = await axios.get(`http://localhost:4030/movie/${resolvedId}/episodes?seasonId=${seasonId}`, { timeout: 3500 });
                 episodes = episodesResponse.data.episodes;
                 if (episodes && episodes.length > 0) {
                     vidstreamSeasonEpisodesCache.set(seasonId, episodes);
@@ -110,12 +110,12 @@ class VidStreamBase extends StreamingProvider {
 
         if (!episodeId) throw new Error('Episode ID not found');
 
-        const serversResponse = await axios.get(`http://localhost:4030/movie/${resolvedId}/servers?episodeId=${episodeId}`);
+        const serversResponse = await axios.get(`http://localhost:4030/movie/${resolvedId}/servers?episodeId=${episodeId}`, { timeout: 3500 });
         const servers = serversResponse.data.servers;
         if (!servers || servers.length === 0) throw new Error('No servers available');
 
         let selectedServer = servers.find(s => s.name.toLowerCase().includes(this.preferredServerName.toLowerCase())) || servers[0];
-        const sourcesResponse = await axios.get(`http://localhost:4030/movie/${resolvedId}/sources?serverId=${selectedServer.id}`);
+        const sourcesResponse = await axios.get(`http://localhost:4030/movie/${resolvedId}/sources?serverId=${selectedServer.id}`, { timeout: 3500 });
         return sourcesResponse.data;
     }
 }
@@ -139,57 +139,99 @@ class VidCloud extends VidStreamBase {
 }
 
 // =============================================================================
-// PROVIDER 3: VidPlay (Iframe fallback)
+// PROVIDER 3: VidPlay (Iframe - VidLink Pro)
 // =============================================================================
 class VidPlay extends StreamingProvider {
     constructor() {
         super('VidPlay', 'iframe');
     }
     async resolve({ tmdbId, mediaType, season, episode }) {
+        const s = season || 1;
+        const e = episode || 1;
         const url = mediaType === 'tv'
-            ? `https://vidlink.pro/tv/${tmdbId}/${season}/${episode}?primaryColor=ffd166&autoplay=true`
+            ? `https://vidlink.pro/tv/${tmdbId}/${s}/${e}?primaryColor=ffd166&autoplay=true`
             : `https://vidlink.pro/movie/${tmdbId}?primaryColor=ffd166&autoplay=true`;
         return { iframeUrl: url };
     }
 }
 
 // =============================================================================
-// PROVIDER 4: VidSrc (Iframe fallback)
+// PROVIDER 4: VidSrc (Iframe - VidSrc Mirrors)
 // =============================================================================
 class VidSrc extends StreamingProvider {
     constructor() {
         super('VidSrc', 'iframe');
     }
     async resolve({ tmdbId, mediaType, season, episode }) {
+        const s = season || 1;
+        const e = episode || 1;
         const url = mediaType === 'tv'
-            ? `https://vidsrc.sbs/embed/tv/${tmdbId}/${season}/${episode}?autoplay=true&color=ffd166`
-            : `https://vidsrc.sbs/embed/movie/${tmdbId}?autoplay=true&color=ffd166`;
+            ? `https://vidsrc.pm/embed/tv/${tmdbId}/${s}/${e}`
+            : `https://vidsrc.pm/embed/movie/${tmdbId}`;
         return { iframeUrl: url };
     }
 }
 
 // =============================================================================
-// PROVIDER 5: 2Embed (Iframe fallback)
+// PROVIDER 5: MultiEmbed (Iframe - MultiEmbed.mov)
+// =============================================================================
+class MultiEmbed extends StreamingProvider {
+    constructor() {
+        super('MultiEmbed', 'iframe');
+    }
+    async resolve({ tmdbId, mediaType, season, episode }) {
+        const s = season || 1;
+        const e = episode || 1;
+        const url = mediaType === 'tv'
+            ? `https://multiembed.mov/?video_id=${tmdbId}&tmdb=1&s=${s}&e=${e}`
+            : `https://multiembed.mov/?video_id=${tmdbId}&tmdb=1`;
+        return { iframeUrl: url };
+    }
+}
+
+// =============================================================================
+// PROVIDER 6: 2Embed (Iframe - 2Embed.cc)
 // =============================================================================
 class TwoEmbed extends StreamingProvider {
     constructor() {
         super('2Embed', 'iframe');
     }
     async resolve({ tmdbId, mediaType, season, episode }) {
+        const s = season || 1;
+        const e = episode || 1;
         const url = mediaType === 'tv'
-            ? `https://www.2embed.online/embed/tv/${tmdbId}/${season}/${episode}`
-            : `https://www.2embed.online/embed/movie/${tmdbId}`;
+            ? `https://www.2embed.cc/embedtv/${tmdbId}&s=${s}&e=${e}`
+            : `https://www.2embed.cc/embed/${tmdbId}`;
         return { iframeUrl: url };
     }
 }
 
-// Registry in fallback order (Instant reliable provider first, followed by alternates)
+// =============================================================================
+// PROVIDER 7: AutoEmbed (Iframe - AutoEmbed Player)
+// =============================================================================
+class AutoEmbed extends StreamingProvider {
+    constructor() {
+        super('AutoEmbed', 'iframe');
+    }
+    async resolve({ tmdbId, mediaType, season, episode }) {
+        const s = season || 1;
+        const e = episode || 1;
+        const url = mediaType === 'tv'
+            ? `https://player.autoembed.cc/embed/tv/${tmdbId}/${s}/${e}`
+            : `https://player.autoembed.cc/embed/movie/${tmdbId}`;
+        return { iframeUrl: url };
+    }
+}
+
+// Registry in fallback order (Instant reliable iframe providers first, followed by alternates & native)
 const PROVIDERS = [
     new VidPlay(),
     new VidSrc(),
+    new MultiEmbed(),
+    new TwoEmbed(),
+    new AutoEmbed(),
     new VidStream(),
-    new VidCloud(),
-    new TwoEmbed()
+    new VidCloud()
 ];
 
 class StreamingProviderManager {
