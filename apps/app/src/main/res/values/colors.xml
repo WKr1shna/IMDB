@@ -2,4 +2,8 @@
 <resources>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+    <color name="wysteria_bg">#FF07060A</color>
+    <color name="wysteria_surface">#FF0E0D14</color>
+    <color name="wysteria_purple">#FF7C3AED</color>
+    <color name="wysteria_light_purple">#FFCDAFF7</color>
 </resources>

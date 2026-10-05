@@ -1,0 +1,7 @@
+apps/
+vidstream-api-temp/
+node_modules/
+.git/
+.idea/
+.gradle/
+*.log
